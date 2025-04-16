@@ -12,7 +12,7 @@ BOT_TOKEN = os.environ.get("BOT_TOKEN")
 bot = telebot.TeleBot(BOT_TOKEN)
 app = Flask(__name__)
 
-WEBHOOK_URL = 'https://srv-cvvug224d50c739og8f0.onrender.com'  
+WEBHOOK_URL = 'https://din-js6l.onrender.com'  
 
 # Установка вебхука
 bot.remove_webhook()
