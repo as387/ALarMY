@@ -21,6 +21,14 @@ bot.set_webhook(url=WEBHOOK_URL)
 scheduler = BackgroundScheduler()
 reminders = {}
 
+from pytz import timezone
+
+moscow = timezone('Europe/Moscow')
+now_local = datetime.now(moscow)
+now_utc = datetime.utcnow()
+
+logger.info(f"[TIME DEBUG] Moscow time: {now_local} | UTC time: {now_utc}")
+
 
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO
@@ -43,6 +51,10 @@ def start_command(message):
     ensure_user_exists(user_id)
     bot.send_message(message.chat.id, "ЙОУ! Выберите действие:", reply_markup=main_menu_keyboard())
 
+@bot.message_handler(commands=['ping'])
+def test_ping(message):
+    bot.send_message(message.chat.id, "Пинг ок!")
+
 @bot.message_handler(func=lambda message: message.text == "Добавить напоминание")
 def add_reminder(message):
     bot.send_message(message.chat.id, "Введите напоминание в формате ЧЧ.ММ *событие*.", reply_markup=types.ReplyKeyboardRemove())
@@ -52,14 +64,18 @@ def process_reminder(message):
     user_id = message.from_user.id
     ensure_user_exists(user_id)
     pattern = r'^\d{1,2}\.\d{2} .+$'
+    
     if re.match(pattern, message.text):
         try:
             time_str, event = message.text.split(' ', 1)
             time_obj = datetime.strptime(time_str, "%H.%M").time()
-            now = datetime.now()
+
+            now = datetime.utcnow()  # Используем UTC
             reminder_datetime = datetime.combine(now.date(), time_obj)
             if reminder_datetime < now:
                 reminder_datetime += timedelta(days=1)
+
+            logger.info(f"[SCHEDULER] Scheduling reminder: {event} at {reminder_datetime} UTC")
 
             job_id = str(uuid.uuid4())
             reminders[user_id].append((reminder_datetime, event, job_id))
@@ -70,7 +86,7 @@ def process_reminder(message):
                 args=[user_id, event, reminder_datetime.strftime("%H:%M"), job_id],
                 id=job_id
             )
-            bot.send_message(message.chat.id, f"Напоминание на {reminder_datetime.strftime('%d.%m %H:%M')} — {event}", reply_markup=main_menu_keyboard())
+            bot.send_message(message.chat.id, f"Напоминание на {reminder_datetime.strftime('%d.%m %H:%M')} (UTC) — {event}", reply_markup=main_menu_keyboard())
         except ValueError:
             bot.send_message(message.chat.id, "Неверный формат. Попробуйте снова.", reply_markup=types.ReplyKeyboardRemove())
             bot.register_next_step_handler(message, process_reminder)
@@ -135,11 +151,16 @@ def process_remove_input(message):
     bot.register_next_step_handler(message, start_command)
 
 def send_reminder(user_id, event, time, job_id):
-    logger.info(f"send_reminder STARTED: user_id={user_id}, reminder_text={event}, time={time}")
-    bot.send_message(user_id, f"Напоминание: {event}", reply_markup=main_menu_keyboard())
+    logger.info(f"[REMINDER] STARTED for user {user_id} | Event: {event} | Time: {time} | Job ID: {job_id}")
+    try:
+        bot.send_message(user_id, f"🔔 Напоминание: {event}", reply_markup=main_menu_keyboard())
+        logger.info(f"[REMINDER] Sent to user {user_id}")
+    except Exception as e:
+        logger.error(f"[REMINDER ERROR] {e}")
+
     if user_id in reminders:
         reminders[user_id] = [rem for rem in reminders[user_id] if rem[2] != job_id]
-    logger.info(f"send_reminder: сообщение отправлено")
+
 
 
 @app.route("/", methods=["POST"])
