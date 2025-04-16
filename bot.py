@@ -189,7 +189,7 @@ def self_ping():
             print(f"[PING] Status: {response.status_code}")
         except Exception as e:
             print(f"[PING ERROR] {e}")
-        sleep(60 * 5)  # Пинг каждые 5 минут
+        sleep(60)
 
 
 if __name__ == "__main__":
