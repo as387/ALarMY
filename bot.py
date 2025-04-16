@@ -68,16 +68,22 @@ def process_reminder(message):
     user_id = message.from_user.id
     ensure_user_exists(user_id)
     pattern = r'^\d{1,2}\.\d{2} .+$'
-    
+
     if re.match(pattern, message.text):
         try:
             time_str, event = message.text.split(' ', 1)
-            time_obj = datetime.strptime(time_str, "%H.%M").time()
 
-            now = datetime.utcnow()  # Используем UTC
-            reminder_datetime = datetime.combine(now.date(), time_obj)
-            if reminder_datetime < now:
-                reminder_datetime += timedelta(days=1)
+            from pytz import timezone, utc
+            moscow = timezone('Europe/Moscow')
+
+            time_obj = datetime.strptime(time_str, "%H.%M").time()
+            now = datetime.now(moscow)
+            reminder_datetime_moscow = moscow.localize(datetime.combine(now.date(), time_obj))
+
+            if reminder_datetime_moscow < now:
+                reminder_datetime_moscow += timedelta(days=1)
+
+            reminder_datetime = reminder_datetime_moscow.astimezone(utc)
 
             logger.info(f"[SCHEDULER] Scheduling reminder: {event} at {reminder_datetime} UTC")
 
@@ -90,7 +96,8 @@ def process_reminder(message):
                 args=[user_id, event, reminder_datetime.strftime("%H:%M"), job_id],
                 id=job_id
             )
-            bot.send_message(message.chat.id, f"Напоминание на {reminder_datetime.strftime('%d.%m %H:%M')} (UTC) — {event}", reply_markup=main_menu_keyboard())
+            bot.send_message(message.chat.id, f"Напоминание на {reminder_datetime_moscow.strftime('%d.%m %H:%M')} (MSK) — {event}", reply_markup=main_menu_keyboard())
+
         except ValueError:
             bot.send_message(message.chat.id, "Неверный формат. Попробуйте снова.", reply_markup=types.ReplyKeyboardRemove())
             bot.register_next_step_handler(message, process_reminder)
