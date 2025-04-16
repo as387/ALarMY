@@ -19,7 +19,6 @@ bot.remove_webhook()
 bot.set_webhook(url=WEBHOOK_URL)
 
 scheduler = BackgroundScheduler()
-scheduler.start()
 reminders = {}
 
 
@@ -142,37 +141,35 @@ def send_reminder(user_id, event, time, job_id):
         reminders[user_id] = [rem for rem in reminders[user_id] if rem[2] != job_id]
     logger.info(f"send_reminder: сообщение отправлено")
 
-@app.route(f"/{BOT_TOKEN}", methods=["POST"])
-def webhook():
-    json_str = request.get_data().decode("utf-8")
-    update = telebot.types.Update.de_json(json_str)
-    bot.process_new_updates([update])
-    return "ok", 200
+
+@app.route("/", methods=["POST"])
+def telegram_webhook():
+    if request.headers.get("content-type") == "application/json":
+        json_str = request.get_data().decode("utf-8")
+        update = telebot.types.Update.de_json(json_str)
+        bot.process_new_updates([update])
+        return "ok", 200
+    return "Invalid request", 400
+
 
 @app.route("/", methods=["GET"])
 def root():
     return "It works!", 200
 
-@app.route('/', methods=['POST'])
-def webhook():
-    if request.headers.get('content-type') == 'application/json':
-        json_str = request.get_data().decode('utf-8')
-        update = telebot.types.Update.de_json(json_str)
-        bot.process_new_updates([update])
-        return '', 200
-    return 'Invalid request', 400
 
 import threading
+import requests
 from time import sleep
 
 def self_ping():
     while True:
         try:
-            response = requests.get(WEBHOOK_URL)
+            response = requests.head(WEBHOOK_URL)
             print(f"[PING] Status: {response.status_code}")
         except Exception as e:
             print(f"[PING ERROR] {e}")
-        sleep(60 * 5)  # каждые 5 минут
+        sleep(60 * 5)  # Пинг каждые 5 минут
+
 
 if __name__ == "__main__":
     scheduler.start()
