@@ -23,17 +23,17 @@ reminders = {}
 
 from pytz import timezone
 
+logging.basicConfig(
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO
+)
+logger = logging.getLogger(__name__)
+
 moscow = timezone('Europe/Moscow')
 now_local = datetime.now(moscow)
 now_utc = datetime.utcnow()
 
 logger.info(f"[TIME DEBUG] Moscow time: {now_local} | UTC time: {now_utc}")
 
-
-logging.basicConfig(
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO
-)
-logger = logging.getLogger(__name__)
 
 def main_menu_keyboard():
     keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
