@@ -160,23 +160,27 @@ def webhook():
         update = telebot.types.Update.de_json(json_str)
         bot.process_new_updates([update])
         return '', 200
-    else:
-        return 'Invalid request', 400
+    return 'Invalid request', 400
 
+import threading
+from time import sleep
+
+def self_ping():
+    while True:
+        try:
+            response = requests.get(WEBHOOK_URL)
+            print(f"[PING] Status: {response.status_code}")
+        except Exception as e:
+            print(f"[PING ERROR] {e}")
+        sleep(60 * 5)  # каждые 5 минут
 
 if __name__ == "__main__":
-    import threading
-    from time import sleep
+    scheduler.start()
 
-    # Задержка, чтобы Render успел поднять сервер
-    sleep(1)
+    # Запуск пингера
+    ping_thread = threading.Thread(target=self_ping)
+    ping_thread.daemon = True
+    ping_thread.start()
 
-    # Установка webhook
-    url = os.environ.get("WEBHOOK_URL")
-    if url:
-        full_url = f"{url}/{BOT_TOKEN}"
-        bot.remove_webhook()
-        bot.set_webhook(full_url)
-        print(f"Webhook установлен на {full_url}")
-
+    # Запуск Flask-сервера
     app.run(host="0.0.0.0", port=10000)
