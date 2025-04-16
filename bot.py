@@ -153,6 +153,17 @@ def webhook():
 def root():
     return "It works!", 200
 
+@app.route('/', methods=['POST'])
+def webhook():
+    if request.headers.get('content-type') == 'application/json':
+        json_str = request.get_data().decode('utf-8')
+        update = telebot.types.Update.de_json(json_str)
+        bot.process_new_updates([update])
+        return '', 200
+    else:
+        return 'Invalid request', 400
+
+
 if __name__ == "__main__":
     import threading
     from time import sleep
