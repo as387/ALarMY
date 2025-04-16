@@ -22,7 +22,6 @@ WEBHOOK_URL = 'https://din-js6l.onrender.com'
 bot.remove_webhook()
 bot.set_webhook(url=WEBHOOK_URL)
 
-scheduler = BackgroundScheduler()
 reminders = {}
 
 from pytz import timezone
@@ -146,8 +145,12 @@ def process_remove_input(message):
         if reminders[user_id]:
             sorted_reminders = sorted(reminders[user_id], key=lambda item: item[0])
             text = "Ваши напоминания:\n"
-            for i, (time, reminder_text, _) in enumerate(sorted_reminders, start=1):
-                text += f"{i}. {time.strftime('%d.%m %H:%M')} - {reminder_text}\n"
+            from pytz import timezone, utc
+            moscow = timezone('Europe/Moscow')
+            
+            for i, (time_utc, reminder_text, _) in enumerate(sorted_reminders, start=1):
+                time_msk = time_utc.astimezone(moscow)
+                text += f"{i}. {time_msk.strftime('%d.%m %H:%M')} - {reminder_text}\n"
             text += "_____________________________________\n"
         else:
             text = "У вас нет активных напоминаний.\n"
