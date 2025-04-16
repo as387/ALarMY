@@ -12,6 +12,10 @@ BOT_TOKEN = os.environ.get("BOT_TOKEN")
 bot = telebot.TeleBot(BOT_TOKEN)
 app = Flask(__name__)
 
+scheduler = BackgroundScheduler()
+scheduler.start()  # ← Перемести сюда
+reminders = {}
+
 WEBHOOK_URL = 'https://din-js6l.onrender.com'  
 
 # Установка вебхука
@@ -161,8 +165,6 @@ def send_reminder(user_id, event, time, job_id):
     if user_id in reminders:
         reminders[user_id] = [rem for rem in reminders[user_id] if rem[2] != job_id]
 
-
-
 @app.route("/", methods=["POST"])
 def telegram_webhook():
     if request.headers.get("content-type") == "application/json":
@@ -193,7 +195,6 @@ def self_ping():
 
 
 if __name__ == "__main__":
-    scheduler.start()
 
     # Запуск пингера
     ping_thread = threading.Thread(target=self_ping)
