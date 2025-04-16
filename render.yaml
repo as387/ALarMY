@@ -2,6 +2,9 @@ services:
   - type: web
     name: reminder-bot
     env: python
+    plan: free
     buildCommand: ""
     startCommand: python bot.py
-    autoDeploy: true
+    envVars:
+      - key: WEBHOOK_URL
+        value: https://<твой-сабдомен-на-render>.onrender.com
