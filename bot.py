@@ -494,16 +494,13 @@ def process_repeating_interval(message):
             "needs_confirmation": False
         })
         save_reminders()
+        form = "день" if interval == "день" else "неделю"
         bot.send_message(
             message.chat.id,
-            form = "день" if interval == "день" else "неделю"
-            bot.send_message(
-                message.chat.id,
-                f"✅ Повторяющееся напоминание на {first_run.strftime('%d.%m %H:%M')} (MSK) — {event} каждую {form}",
-                reply_markup=menu_keyboard
-            )
+            f"✅ Повторяющееся напоминание на {first_run.strftime('%d.%m %H:%M')} (MSK) — {event} каждую {form}",
             reply_markup=menu_keyboard
         )
+        
     except Exception as e:
         logger.error(f"Ошибка в повторяющемся напоминании: {e}")
         bot.send_message(message.chat.id, "Что-то пошло не так. Попробуйте снова.", reply_markup=ReplyKeyboardMarkup())
