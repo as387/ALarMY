@@ -448,12 +448,11 @@ def process_repeating_interval(message):
             "needs_confirmation": False
         })
         save_reminders()
-
-                bot.send_message(
-                    message.chat.id,
-                    f"✅ Повторяющееся напоминание на {first_run.strftime('%d.%m %H:%M')} (MSK) — {event} каждую {interval}",
-                    reply_markup=menu_keyboard
-                )
+        bot.send_message(
+            message.chat.id,
+            f"✅ Повторяющееся напоминание на {first_run.strftime('%d.%m %H:%M')} (MSK) — {event} каждую {interval}",
+            reply_markup=menu_keyboard
+        )
     except Exception as e:
         logger.error(f"Ошибка в повторяющемся напоминании: {e}")
         bot.send_message(message.chat.id, "Что-то пошло не так. Попробуйте снова.", reply_markup=main_menu_keyboard())
