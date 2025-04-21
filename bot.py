@@ -470,8 +470,6 @@ def process_repeating_interval(message):
     
     time_str = data["time_str"]
     event = data["event"]
-    del temp_repeating[user_id]  # Удалить после использования
-
     
     user_id = message.from_user.id
     ensure_user_exists(user_id)
@@ -547,6 +545,8 @@ def process_repeating_interval(message):
     except Exception as e:
         logger.error(f"Ошибка в повторяющемся напоминании: {e}")
         bot.send_message(message.chat.id, "Что-то пошло не так. Попробуйте снова.", reply_markup=ReplyKeyboardMarkup())
+
+    del temp_repeating[user_id]
 
 def process_remove_input(message):
 
