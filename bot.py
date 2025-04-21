@@ -490,7 +490,6 @@ def process_remove_input(message):
         reminder_indices = list(map(int, re.findall(r'\d+', message.text)))
         sorted_reminders = sorted(reminders[user_id], key=lambda item: item["time"])
         reminders_to_remove = [sorted_reminders[i - 1] for i in reminder_indices if 0 < i <= len(sorted_reminders)]
-
         for rem in reminders_to_remove:
             for job in scheduler.get_jobs():
                 if job.id == rem["job_id"]:
@@ -498,13 +497,11 @@ def process_remove_input(message):
             reminders[user_id].remove(rem)
             save_reminders()
 
-        bot.send_message(
-            message.chat.id,
-            "🗑 Напоминания удалены.",
-            reply_markup=menu_keyboard
-        )
-
-
+            bot.send_message(
+                message.chat.id,
+                "🗑 Напоминания удалены.",
+                reply_markup=menu_keyboard
+            )
     except Exception:
         bot.send_message(message.chat.id, "Некорректный ввод, отмена удаления.", reply_markup=main_menu_keyboard())
 
