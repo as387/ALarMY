@@ -77,6 +77,9 @@ def add_reminder(message):
     bot.register_next_step_handler(message, process_reminder)
 
 def process_reminder(message):
+    if message.text == "↩️ Назад в меню":
+        return back_to_main_menu(message)
+    
     user_id = message.from_user.id
     ensure_user_exists(user_id)
     moscow = timezone('Europe/Moscow')
@@ -133,6 +136,10 @@ def add_repeating_reminder(message):
     bot.register_next_step_handler(message, ask_repeat_interval)
 
 def ask_repeat_interval(message):
+
+    if message.text == "↩️ Назад в меню":
+        return back_to_main_menu(message)
+    
     user_id = message.from_user.id
     try:
         time_match = re.match(r'^(\d{1,2})\.(\d{2}) (.+)', message.text)
@@ -161,6 +168,9 @@ def ask_repeat_interval(message):
 
 def process_repeating_interval(message):
 
+    if message.text == "↩️ Назад в меню":
+        return back_to_main_menu(message)
+    
     user_id = message.from_user.id
     data = temp_repeating.get(user_id)
     
@@ -241,6 +251,10 @@ def show_reminders(message):
     bot.register_next_step_handler(message, process_remove_input)
 
 def process_remove_input(message):
+
+    if message.text == "↩️ Назад в меню":
+        return back_to_main_menu(message)
+    
     user_id = message.from_user.id
     ensure_user_exists(user_id)
     try:
