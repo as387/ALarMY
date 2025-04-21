@@ -8,6 +8,8 @@ import uuid
 import re
 from telebot import types
 
+temp_repeating = {}
+
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 bot = telebot.TeleBot(BOT_TOKEN)
 app = Flask(__name__)
@@ -59,71 +61,114 @@ def add_reminder(message):
 def process_reminder(message):
     user_id = message.from_user.id
     ensure_user_exists(user_id)
-    pattern = r'^\d{1,2}\.\d{2} .+$'
+    moscow = timezone('Europe/Moscow')
+    now = datetime.now(moscow)
 
-    if re.match(pattern, message.text):
-        try:
-            moscow = timezone('Europe/Moscow')
-            now = datetime.now(moscow)
+    try:
+        # Паттерн с датой
+        full_match = re.match(r'^(\d{1,2})\.(\d{1,2}) (\d{1,2})\.(\d{2}) (.+)', message.text)
+        if full_match:
+            day, month, hour, minute, event = full_match.groups()
+            reminder_datetime_moscow = moscow.localize(datetime(
+                year=now.year, month=int(month), day=int(day),
+                hour=int(hour), minute=int(minute)
+            ))
+        else:
+            # Паттерн только с временем
+            time_match = re.match(r'^(\d{1,2})\.(\d{2}) (.+)', message.text)
+            if not time_match:
+                raise ValueError
+            hour, minute, event = time_match.groups()
+            reminder_datetime_moscow = moscow.localize(datetime.combine(now.date(), datetime.strptime(f"{hour}.{minute}", "%H.%M").time()))
+            if reminder_datetime_moscow < now:
+                reminder_datetime_moscow += timedelta(days=1)
 
-            date_match = re.match(r'^(\d{1,2})\.(\d{1,2}) (\d{1,2})\.(\d{2}) (.+)', message.text)
-            if date_match:
-                day, month, hour, minute, event = date_match.groups()
-                reminder_datetime_moscow = moscow.localize(datetime(
-                    year=now.year, month=int(month), day=int(day),
-                    hour=int(hour), minute=int(minute)
-                ))
-            else:
-                time_str, event = message.text.split(' ', 1)
-                time_obj = datetime.strptime(time_str, "%H.%M").time()
-                reminder_datetime_moscow = moscow.localize(datetime.combine(now.date(), time_obj))
-                if reminder_datetime_moscow < now:
-                    reminder_datetime_moscow += timedelta(days=1)
+        reminder_datetime = reminder_datetime_moscow.astimezone(utc)
 
-            reminder_datetime = reminder_datetime_moscow.astimezone(utc)
+        job_id = str(uuid.uuid4())
+        reminders[user_id].append({
+            "time": reminder_datetime,
+            "text": event,
+            "job_id": job_id,
+            "is_repeating": False
+        })
 
-            job_id = str(uuid.uuid4())
-            reminders[user_id].append({
-                "time": reminder_datetime,
-                "text": event,
-                "job_id": job_id,
-                "is_repeating": False
-            })
+        scheduler.add_job(
+            send_reminder,
+            trigger='date',
+            run_date=reminder_datetime,
+            args=[user_id, event, reminder_datetime.strftime("%H:%M"), job_id],
+            id=job_id
+        )
 
-            scheduler.add_job(
-                send_reminder,
-                trigger='date',
-                run_date=reminder_datetime,
-                args=[user_id, event, reminder_datetime.strftime("%H:%M"), job_id],
-                id=job_id
-            )
+        bot.send_message(message.chat.id, f"Напоминание на {reminder_datetime_moscow.strftime('%d.%m %H:%M')} (MSK) — {event}", reply_markup=main_menu_keyboard())
 
-            bot.send_message(message.chat.id, f"Напоминание на {reminder_datetime_moscow.strftime('%d.%m %H:%M')} (MSK) — {event}", reply_markup=main_menu_keyboard())
-
-        except ValueError:
-            bot.send_message(message.chat.id, "Неверный формат. Попробуйте снова.", reply_markup=types.ReplyKeyboardRemove())
-            bot.register_next_step_handler(message, process_reminder)
-    else:
+    except Exception:
         bot.send_message(message.chat.id, "Неверный формат. Попробуйте снова.", reply_markup=types.ReplyKeyboardRemove())
         bot.register_next_step_handler(message, process_reminder)
 
 @bot.message_handler(func=lambda message: message.text == "Повторяющееся напоминание")
 def add_repeating_reminder(message):
-    bot.send_message(message.chat.id, "Введите напоминание в формате ЧЧ.ММ *событие* *интервал (день/час)*.", reply_markup=types.ReplyKeyboardRemove())
-    bot.register_next_step_handler(message, process_repeating_reminder)
+    bot.send_message(message.chat.id, "Введите время и событие в формате ЧЧ.ММ *событие*.", reply_markup=types.ReplyKeyboardRemove())
+    bot.register_next_step_handler(message, ask_repeat_interval)
 
-def process_repeating_reminder(message):
+def ask_repeat_interval(message):
     user_id = message.from_user.id
-    ensure_user_exists(user_id)
     try:
-        parts = message.text.strip().split(' ')
-        if len(parts) < 3:
+        time_match = re.match(r'^(\d{1,2})\.(\d{2}) (.+)', message.text)
+        if not time_match:
             raise ValueError
 
-        time_str = parts[0]
-        event = ' '.join(parts[1:-1])
-        interval = parts[-1].lower()
+        hour, minute, event = time_match.groups()
+        
+        temp_repeating[user_id] = {
+            "time_str": f"{hour}.{minute}",
+            "event": event
+        }
 
+        # Предлагаем выбор интервала
+        keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
+        keyboard.add(types.KeyboardButton("Каждый день"), types.KeyboardButton("Каждую неделю"))
+        bot.send_message(message.chat.id, "Как часто повторять?", reply_markup=keyboard)
+        bot.register_next_step_handler(message, process_repeating_interval)
+
+    except:
+        bot.send_message(message.chat.id, "Неверный формат. Попробуйте снова.")
+        bot.register_next_step_handler(message, add_repeating_reminder)
+
+
+def process_repeating_interval(message):
+
+    user_id = message.from_user.id
+    data = temp_repeating.get(user_id)
+    
+    if not data:
+        bot.send_message(message.chat.id, "Что-то пошло не так. Начните заново.")
+        return
+    
+    time_str = data["time_str"]
+    event = data["event"]
+    del temp_repeating[user_id]  # Удалить после использования
+
+    
+    user_id = message.from_user.id
+    ensure_user_exists(user_id)
+    interval_input = message.text.strip().lower()
+
+    time_str = data["time_str"]
+    event = data["event"]
+
+    interval = None
+    if interval_input == "каждый день":
+        interval = "день"
+    elif interval_input == "каждую неделю":
+        interval = "неделя"
+    else:
+        bot.send_message(message.chat.id, "Непонятный интервал. Попробуйте снова.")
+        bot.register_next_step_handler(message, process_repeating_interval)
+        return
+
+    try:
         moscow = timezone('Europe/Moscow')
         now = datetime.now(moscow)
         time_obj = datetime.strptime(time_str, "%H.%M").time()
@@ -138,11 +183,9 @@ def process_repeating_reminder(message):
         if interval == 'день':
             scheduler.add_job(send_reminder, 'interval', days=1, start_date=first_run_utc,
                               args=[user_id, event, time_str, job_id], id=job_id)
-        elif interval == 'час':
-            scheduler.add_job(send_reminder, 'interval', hours=1, start_date=first_run_utc,
+        elif interval == 'неделя':
+            scheduler.add_job(send_reminder, 'interval', weeks=1, start_date=first_run_utc,
                               args=[user_id, event, time_str, job_id], id=job_id)
-        else:
-            raise ValueError
 
         reminders[user_id].append({
             "time": first_run_utc,
@@ -154,9 +197,9 @@ def process_repeating_reminder(message):
         bot.send_message(message.chat.id,
                          f"Повторяющееся напоминание на {first_run.strftime('%d.%m %H:%M')} (MSK) — {event} каждую {interval}",
                          reply_markup=main_menu_keyboard())
-    except Exception:
-        bot.send_message(message.chat.id, "Неверный формат. Попробуйте снова.", reply_markup=types.ReplyKeyboardRemove())
-        bot.register_next_step_handler(message, process_repeating_reminder)
+    except Exception as e:
+        logger.error(f"Ошибка в повторяющемся напоминании: {e}")
+        bot.send_message(message.chat.id, "Что-то пошло не так. Попробуйте снова.", reply_markup=main_menu_keyboard())
 
 @bot.message_handler(func=lambda message: message.text == "Показать напоминания")
 def show_reminders(message):
@@ -167,14 +210,12 @@ def show_reminders(message):
         return
 
     sorted_reminders = sorted(reminders[user_id], key=lambda item: item["time"])
-    text = "Ваши напоминания:
-"
+    text = "Ваши напоминания:\n"
     for i, rem in enumerate(sorted_reminders, start=1):
         msk_time = rem["time"].astimezone(moscow)
-        text += f"{i}. {msk_time.strftime('%d.%m %H:%M')} - {rem['text']}
-"
-    text += "
-Введите номера напоминаний для удаления (через пробел):"
+        text += f"{i}. {msk_time.strftime('%d.%m %H:%M')} - {rem['text']}\n"
+    text += "\nВведите номера напоминаний для удаления (через пробел):"
+
     bot.send_message(message.chat.id, text, reply_markup=types.ReplyKeyboardRemove())
     bot.register_next_step_handler(message, process_remove_input)
 
