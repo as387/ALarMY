@@ -138,10 +138,20 @@ def save_user_info(user):
 @bot.message_handler(commands=['start'])
 def start_command(message):
     user_id = message.from_user.id
+
+    # Обеспечиваем, что пользователь записан
     ensure_user_exists(user_id)
     save_user_info(message.from_user)
+
+    # Сбрасываем возможные "ожидающие шаги"
     bot.clear_step_handler_by_chat_id(message.chat.id)
-    bot.send_message(message.chat.id, "ЙОУ! Выберите действие:", reply_markup=menu_keyboard)
+
+    # Возвращаем главное меню
+    bot.send_message(
+        message.chat.id,
+        "Главное меню:\nВыберите действие:",
+        reply_markup=menu_keyboard
+    )
 
 @bot.message_handler(func=lambda message: message.text == "➕ Добавить")
 def handle_add(message):
@@ -210,6 +220,53 @@ def add_reminder(message):
     bot.send_message(message.chat.id, "Введите напоминание в формате ЧЧ.ММ *событие* или ДД.ММ ЧЧ.ММ *событие*.", 	reply_markup=back_to_menu_keyboard())
     bot.clear_step_handler_by_chat_id(message.chat.id)
     bot.register_next_step_handler(message, process_reminder)
+
+def process_reminder(message):
+    if message.text == "↩️ Назад в меню":
+        return back_to_main_menu(message)
+    
+    user_id = message.from_user.id
+    ensure_user_exists(user_id)
+    now = datetime.now(moscow)
+
+    try:
+        # Обработка формата даты/времени
+        ...
+
+        # Сохраняем напоминание
+        reminders[user_id].append({
+            "time": reminder_datetime,
+            "text": event,
+            "job_id": job_id,
+            "is_repeating": False,
+            "needs_confirmation": False
+        })
+        save_reminders()
+
+        scheduler.add_job(
+            send_reminder,
+            trigger='date',
+            run_date=reminder_datetime,
+            args=[user_id, event, reminder_datetime.strftime("%H:%M"), job_id],
+            id=job_id
+        )
+
+        # 🔥 Вот здесь ВОЗВРАТ К ГЛАВНОМУ МЕНЮ
+        bot.send_message(
+            message.chat.id,
+            f"✅ Напоминание на {reminder_datetime_moscow.strftime('%d.%m %H:%M')} (MSK) — {event}",
+            reply_markup=menu_keyboard
+        )
+
+    except Exception:
+        bot.send_message(
+            message.chat.id,
+            "Неверный формат. Попробуйте снова.",
+            reply_markup=back_to_menu_keyboard()
+        )
+        bot.clear_step_handler_by_chat_id(message.chat.id)
+        bot.register_next_step_handler(message, process_reminder)
+
 
 ADMIN_ID = 941791842  # замени на свой Telegram ID
 
@@ -392,9 +449,11 @@ def process_repeating_interval(message):
         })
         save_reminders()
 
-        bot.send_message(message.chat.id,
-                         f"Повторяющееся напоминание на {first_run.strftime('%d.%m %H:%M')} (MSK) — {event} каждую {interval}",
-                         reply_markup=main_menu_keyboard())
+                bot.send_message(
+                    message.chat.id,
+                    f"✅ Повторяющееся напоминание на {first_run.strftime('%d.%m %H:%M')} (MSK) — {event} каждую {interval}",
+                    reply_markup=menu_keyboard
+                )
     except Exception as e:
         logger.error(f"Ошибка в повторяющемся напоминании: {e}")
         bot.send_message(message.chat.id, "Что-то пошло не так. Попробуйте снова.", reply_markup=main_menu_keyboard())
@@ -439,7 +498,12 @@ def process_remove_input(message):
             reminders[user_id].remove(rem)
             save_reminders()
 
-        bot.send_message(message.chat.id, "Напоминания удалены.", reply_markup=main_menu_keyboard())
+        bot.send_message(
+            message.chat.id,
+            "🗑 Напоминания удалены.",
+            reply_markup=menu_keyboard
+        )
+
 
     except Exception:
         bot.send_message(message.chat.id, "Некорректный ввод, отмена удаления.", reply_markup=main_menu_keyboard())
@@ -569,7 +633,11 @@ def process_repeat_selection(message):
                     rem["repeat_interval"] = custom_interval
 
         save_reminders()
-        bot.send_message(message.chat.id, f"Обновлено! Повтор будет через {custom_interval} минут (если включено).", reply_markup=main_menu_keyboard())
+        bot.send_message(
+            message.chat.id,
+            f"✅ Обновлено! Повтор через {custom_interval} мин. (если включено)",
+            reply_markup=menu_keyboard
+        )
     except Exception as e:
         bot.send_message(message.chat.id, "Что-то пошло не так. Проверь формат и попробуй снова.", reply_markup=main_menu_keyboard())
         logger.error(f"[REPEAT_SELECTION ERROR] {e}")
