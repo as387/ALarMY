@@ -800,50 +800,51 @@ def handle_weekday_selection(call):
         reply_markup=create_weekday_keyboard(user_id)
     )
 
-@bot.callback_query_handler(func=lambda call: call.data == "weekday_done")
+@bot.callback_query_handler(func=lambda call: call.data == "done_weekdays")
 def handle_weekday_done(call):
     user_id = call.from_user.id
-    days = sorted(selected_weekdays.get(user_id, []))
-    if not days:
-        return  # ничего не выбрано, игнорируем
+    selected = selected_weekdays.get(user_id, [])
 
-    del selected_weekdays[user_id]
+    if not selected:
+        bot.answer_callback_query(call.id, "Выбери хотя бы один день!")
+        return
 
     time_str = temp_repeating[user_id]["time_str"]
     event = temp_repeating[user_id]["event"]
 
+    # Преобразуем в строку типа 'пн, ср, сб'
+    days = ', '.join([weekday_localized[day] for day in selected])
+
+    # Сохраняем напоминание, логика может быть разной
+    job_id = str(uuid.uuid4())
     moscow = timezone('Europe/Moscow')
     now = datetime.now(moscow)
-    hour, minute = map(int, time_str.split('.'))
+    time_obj = datetime.strptime(time_str, "%H.%M").time()
+    first_run = moscow.localize(datetime.combine(now.date(), time_obj))
+    first_run_utc = first_run.astimezone(utc)
 
-    localized_days = ", ".join(DAYS_RU[d] for d in days)
-    job_ids = []
+    # Добавляем одно напоминание — позже можно будет настроить под каждый день отдельно
+    scheduler.add_job(send_reminder, 'interval', weeks=1, start_date=first_run_utc,
+                      args=[user_id, event, time_str, job_id], id=job_id)
 
-    for d in days:
-        days_ahead = (d - now.weekday()) % 7
-        first_run = datetime.combine(now.date(), datetime(hour, minute).time()) + timedelta(days=days_ahead)
-        first_run = moscow.localize(first_run).astimezone(utc)
-        job_id = str(uuid.uuid4())
-        scheduler.add_job(send_reminder, 'interval', weeks=1, start_date=first_run,
-                          args=[user_id, event, time_str, job_id], id=job_id)
-        job_ids.append(job_id)
-
-    for job_id in job_ids:
-        reminders[user_id].append({
-            "time": datetime.now().astimezone(utc),  # любое значение, просто для сортировки
-            "text": f"{event} 🔁 ({localized_days})",
-            "job_id": job_id,
-            "is_repeating": True,
-            "needs_confirmation": False
-        })
+    reminders[user_id].append({
+        "time": first_run_utc,
+        "text": f"{event} (повт. неделя)",
+        "job_id": job_id,
+        "is_repeating": True,
+        "needs_confirmation": False
+    })
     save_reminders()
 
-    bot.send_message(
-        call.message.chat.id,
-        f"✅ Повторяющееся напоминание — {event} 🔁 ({localized_days})",
-        reply_markup=menu_keyboard
-    )
+    del temp_repeating[user_id]
+    del selected_weekdays[user_id]
 
+    bot.edit_message_text(
+        chat_id=call.message.chat.id,
+        message_id=call.message.message_id,
+        text=f"✅ Повторяющееся напоминание на {time_str} (MSK) — {event} 🔁 ({days})",
+        reply_markup=None
+    )
     
 if __name__ == "__main__":
     load_reminders()
