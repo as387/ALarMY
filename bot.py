@@ -110,6 +110,16 @@ def back_to_main_menu(message):
 def test_ping(message):
     bot.send_message(message.chat.id, "Пинг ок!")
 
+@bot.message_handler(commands=['dump'])
+def dump_reminders(message):
+    try:
+        with open("reminders.json", "r", encoding="utf-8") as f:
+            data = f.read()
+        # Отправляем в виде кода, чтобы сохранить формат
+        bot.send_message(message.chat.id, f"```json\n{data}\n```", parse_mode="Markdown")
+    except FileNotFoundError:
+        bot.send_message(message.chat.id, "Файл reminders.json не найден.")
+
 @bot.message_handler(func=lambda message: message.text == "Добавить напоминание")
 def add_reminder(message):
     bot.send_message(message.chat.id, "Введите напоминание в формате ЧЧ.ММ *событие* или ДД.ММ ЧЧ.ММ *событие*.", 	reply_markup=back_to_menu_keyboard())
