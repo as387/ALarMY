@@ -13,18 +13,15 @@ bot = telebot.TeleBot(BOT_TOKEN)
 app = Flask(__name__)
 
 scheduler = BackgroundScheduler()
-scheduler.start()  # ← Перемести сюда
+scheduler.start()
 reminders = {}
 
 WEBHOOK_URL = 'https://din-js6l.onrender.com'  
 
-# Установка вебхука
 bot.remove_webhook()
 bot.set_webhook(url=WEBHOOK_URL)
 
-reminders = {}
-
-from pytz import timezone
+from pytz import timezone, utc
 
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO
@@ -32,15 +29,11 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 moscow = timezone('Europe/Moscow')
-now_local = datetime.now(moscow)
-now_utc = datetime.utcnow()
-
-logger.info(f"[TIME DEBUG] Moscow time: {now_local} | UTC time: {now_utc}")
-
 
 def main_menu_keyboard():
     keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
     keyboard.add(types.KeyboardButton("Добавить напоминание"))
+    keyboard.add(types.KeyboardButton("Повторяющееся напоминание"))
     keyboard.add(types.KeyboardButton("Показать напоминания"))
     return keyboard
 
@@ -60,7 +53,7 @@ def test_ping(message):
 
 @bot.message_handler(func=lambda message: message.text == "Добавить напоминание")
 def add_reminder(message):
-    bot.send_message(message.chat.id, "Введите напоминание в формате ЧЧ.ММ *событие*.", reply_markup=types.ReplyKeyboardRemove())
+    bot.send_message(message.chat.id, "Введите напоминание в формате ЧЧ.ММ *событие* или ДД.ММ ЧЧ.ММ *событие*.", reply_markup=types.ReplyKeyboardRemove())
     bot.register_next_step_handler(message, process_reminder)
 
 def process_reminder(message):
@@ -70,24 +63,33 @@ def process_reminder(message):
 
     if re.match(pattern, message.text):
         try:
-            time_str, event = message.text.split(' ', 1)
-
-            from pytz import timezone, utc
             moscow = timezone('Europe/Moscow')
-
-            time_obj = datetime.strptime(time_str, "%H.%M").time()
             now = datetime.now(moscow)
-            reminder_datetime_moscow = moscow.localize(datetime.combine(now.date(), time_obj))
 
-            if reminder_datetime_moscow < now:
-                reminder_datetime_moscow += timedelta(days=1)
+            date_match = re.match(r'^(\d{1,2})\.(\d{1,2}) (\d{1,2})\.(\d{2}) (.+)', message.text)
+            if date_match:
+                day, month, hour, minute, event = date_match.groups()
+                reminder_datetime_moscow = moscow.localize(datetime(
+                    year=now.year, month=int(month), day=int(day),
+                    hour=int(hour), minute=int(minute)
+                ))
+            else:
+                time_str, event = message.text.split(' ', 1)
+                time_obj = datetime.strptime(time_str, "%H.%M").time()
+                reminder_datetime_moscow = moscow.localize(datetime.combine(now.date(), time_obj))
+                if reminder_datetime_moscow < now:
+                    reminder_datetime_moscow += timedelta(days=1)
 
             reminder_datetime = reminder_datetime_moscow.astimezone(utc)
 
-            logger.info(f"[SCHEDULER] Scheduling reminder: {event} at {reminder_datetime} UTC")
-
             job_id = str(uuid.uuid4())
-            reminders[user_id].append((reminder_datetime, event, job_id))
+            reminders[user_id].append({
+                "time": reminder_datetime,
+                "text": event,
+                "job_id": job_id,
+                "is_repeating": False
+            })
+
             scheduler.add_job(
                 send_reminder,
                 trigger='date',
@@ -95,6 +97,7 @@ def process_reminder(message):
                 args=[user_id, event, reminder_datetime.strftime("%H:%M"), job_id],
                 id=job_id
             )
+
             bot.send_message(message.chat.id, f"Напоминание на {reminder_datetime_moscow.strftime('%d.%m %H:%M')} (MSK) — {event}", reply_markup=main_menu_keyboard())
 
         except ValueError:
@@ -104,6 +107,57 @@ def process_reminder(message):
         bot.send_message(message.chat.id, "Неверный формат. Попробуйте снова.", reply_markup=types.ReplyKeyboardRemove())
         bot.register_next_step_handler(message, process_reminder)
 
+@bot.message_handler(func=lambda message: message.text == "Повторяющееся напоминание")
+def add_repeating_reminder(message):
+    bot.send_message(message.chat.id, "Введите напоминание в формате ЧЧ.ММ *событие* *интервал (день/час)*.", reply_markup=types.ReplyKeyboardRemove())
+    bot.register_next_step_handler(message, process_repeating_reminder)
+
+def process_repeating_reminder(message):
+    user_id = message.from_user.id
+    ensure_user_exists(user_id)
+    try:
+        parts = message.text.strip().split(' ')
+        if len(parts) < 3:
+            raise ValueError
+
+        time_str = parts[0]
+        event = ' '.join(parts[1:-1])
+        interval = parts[-1].lower()
+
+        moscow = timezone('Europe/Moscow')
+        now = datetime.now(moscow)
+        time_obj = datetime.strptime(time_str, "%H.%M").time()
+        first_run = moscow.localize(datetime.combine(now.date(), time_obj))
+
+        if first_run < now:
+            first_run += timedelta(days=1)
+
+        first_run_utc = first_run.astimezone(utc)
+        job_id = str(uuid.uuid4())
+
+        if interval == 'день':
+            scheduler.add_job(send_reminder, 'interval', days=1, start_date=first_run_utc,
+                              args=[user_id, event, time_str, job_id], id=job_id)
+        elif interval == 'час':
+            scheduler.add_job(send_reminder, 'interval', hours=1, start_date=first_run_utc,
+                              args=[user_id, event, time_str, job_id], id=job_id)
+        else:
+            raise ValueError
+
+        reminders[user_id].append({
+            "time": first_run_utc,
+            "text": event + f" (повт. {interval})",
+            "job_id": job_id,
+            "is_repeating": True
+        })
+
+        bot.send_message(message.chat.id,
+                         f"Повторяющееся напоминание на {first_run.strftime('%d.%m %H:%M')} (MSK) — {event} каждую {interval}",
+                         reply_markup=main_menu_keyboard())
+    except Exception:
+        bot.send_message(message.chat.id, "Неверный формат. Попробуйте снова.", reply_markup=types.ReplyKeyboardRemove())
+        bot.register_next_step_handler(message, process_repeating_reminder)
+
 @bot.message_handler(func=lambda message: message.text == "Показать напоминания")
 def show_reminders(message):
     user_id = message.from_user.id
@@ -112,11 +166,15 @@ def show_reminders(message):
         bot.send_message(message.chat.id, "У вас нет активных напоминаний.", reply_markup=main_menu_keyboard())
         return
 
-    sorted_reminders = sorted(reminders[user_id], key=lambda item: item[0])
-    text = "Ваши напоминания:\n"
-    for i, (time, reminder_text, _) in enumerate(sorted_reminders, start=1):
-        text += f"{i}. {time.strftime('%d.%m %H:%M')} - {reminder_text}\n"
-    text += "\nВведите номера напоминаний для удаления (через пробел):"
+    sorted_reminders = sorted(reminders[user_id], key=lambda item: item["time"])
+    text = "Ваши напоминания:
+"
+    for i, rem in enumerate(sorted_reminders, start=1):
+        msk_time = rem["time"].astimezone(moscow)
+        text += f"{i}. {msk_time.strftime('%d.%m %H:%M')} - {rem['text']}
+"
+    text += "
+Введите номера напоминаний для удаления (через пробел):"
     bot.send_message(message.chat.id, text, reply_markup=types.ReplyKeyboardRemove())
     bot.register_next_step_handler(message, process_remove_input)
 
@@ -125,55 +183,33 @@ def process_remove_input(message):
     ensure_user_exists(user_id)
     try:
         reminder_indices = list(map(int, re.findall(r'\d+', message.text)))
-        reminders_to_remove = []
-        sorted_reminders = sorted(reminders[user_id], key=lambda item: item[0])
-        for reminder_index in reminder_indices:
-            if 0 < reminder_index <= len(sorted_reminders):
-                time, reminder_text, job_id = sorted_reminders[reminder_index - 1]
-                for job in scheduler.get_jobs():
-                    if job.id == job_id:
-                        job.remove()
-                        break
-                reminders_to_remove.append((reminder_index, time, reminder_text))
+        sorted_reminders = sorted(reminders[user_id], key=lambda item: item["time"])
+        reminders_to_remove = [sorted_reminders[i - 1] for i in reminder_indices if 0 < i <= len(sorted_reminders)]
 
-        for index, time, reminder_text in sorted(reminders_to_remove, reverse=True):
-            for i, (time2, reminder_text2, job_id) in enumerate(reminders[user_id]):
-                if time == time2 and reminder_text == reminder_text2:
-                    reminders[user_id].pop(i)
-                    break
+        for rem in reminders_to_remove:
+            for job in scheduler.get_jobs():
+                if job.id == rem["job_id"]:
+                    job.remove()
+            reminders[user_id].remove(rem)
 
-        if reminders[user_id]:
-            sorted_reminders = sorted(reminders[user_id], key=lambda item: item[0])
-            text = "Ваши напоминания:\n"
-            from pytz import timezone, utc
-            moscow = timezone('Europe/Moscow')
-            
-            for i, (time_utc, reminder_text, _) in enumerate(sorted_reminders, start=1):
-                time_msk = time_utc.astimezone(moscow)
-                text += f"{i}. {time_msk.strftime('%d.%m %H:%M')} - {reminder_text}\n"
-            text += "_____________________________________\n"
-        else:
-            text = "У вас нет активных напоминаний.\n"
+        bot.send_message(message.chat.id, "Напоминания удалены.", reply_markup=main_menu_keyboard())
 
-        if reminders_to_remove:
-            text += "".join(f"удалено - {reminder_text} {time.strftime('%H:%M')}\n" for _, time, reminder_text in reminders_to_remove)
-
-        bot.send_message(message.chat.id, text, reply_markup=main_menu_keyboard())
-
-    except ValueError:
+    except Exception:
         bot.send_message(message.chat.id, "Некорректный ввод, отмена удаления.", reply_markup=main_menu_keyboard())
-    bot.register_next_step_handler(message, start_command)
 
 def send_reminder(user_id, event, time, job_id):
     logger.info(f"[REMINDER] STARTED for user {user_id} | Event: {event} | Time: {time} | Job ID: {job_id}")
     try:
-        bot.send_message(user_id, f"🔔 Напоминание: {event}", reply_markup=main_menu_keyboard())
+        reminder_time_utc = datetime.utcnow()
+        reminder_time_msk = utc.localize(reminder_time_utc).astimezone(moscow).strftime('%H:%M')
+
+        bot.send_message(user_id, f"🔔 Напоминание: {event} (в {reminder_time_msk} по МСК)", reply_markup=main_menu_keyboard())
         logger.info(f"[REMINDER] Sent to user {user_id}")
     except Exception as e:
         logger.error(f"[REMINDER ERROR] {e}")
 
     if user_id in reminders:
-        reminders[user_id] = [rem for rem in reminders[user_id] if rem[2] != job_id]
+        reminders[user_id] = [rem for rem in reminders[user_id] if rem["job_id"] != job_id or rem["is_repeating"]]
 
 @app.route("/", methods=["POST"])
 def telegram_webhook():
@@ -184,11 +220,9 @@ def telegram_webhook():
         return "ok", 200
     return "Invalid request", 400
 
-
 @app.route("/", methods=["GET"])
 def root():
     return "It works!", 200
-
 
 import threading
 import requests
@@ -203,13 +237,8 @@ def self_ping():
             print(f"[PING ERROR] {e}")
         sleep(60)
 
-
 if __name__ == "__main__":
-
-    # Запуск пингера
     ping_thread = threading.Thread(target=self_ping)
     ping_thread.daemon = True
     ping_thread.start()
-
-    # Запуск Flask-сервера
     app.run(host="0.0.0.0", port=10000)
