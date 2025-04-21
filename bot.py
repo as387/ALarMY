@@ -802,6 +802,8 @@ def handle_weekday_selection(call):
 
 @bot.callback_query_handler(func=lambda call: call.data == "weekday_done")
 def handle_weekday_done(call):
+    print("НАЖАЛИ ГОТОВО!")
+
     user_id = call.from_user.id
     chat_id = call.message.chat.id
     selected = selected_weekdays.get(user_id, [])
