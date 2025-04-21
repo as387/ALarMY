@@ -11,6 +11,27 @@ from telebot.types import ReplyKeyboardMarkup, KeyboardButton
 
 from telebot.types import ReplyKeyboardMarkup, KeyboardButton
 
+DAYS_RU = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"]
+
+selected_weekdays = {}
+
+def create_weekday_keyboard(user_id):
+    selected = selected_weekdays.get(user_id, [])
+    keyboard = types.InlineKeyboardMarkup(row_width=4)
+    buttons = []
+
+    for i, day in enumerate(DAYS_RU):
+        prefix = "✅ " if i in selected else ""
+        buttons.append(types.InlineKeyboardButton(f"{prefix}{day}", callback_data=f"weekday_{i}"))
+
+    keyboard.add(*buttons)
+    if selected:
+        keyboard.add(types.InlineKeyboardButton("✅ Готово", callback_data="weekday_done"))
+    else:
+        keyboard.add(types.InlineKeyboardButton("🔒 Готово", callback_data="disabled"))
+
+    return keyboard
+
 menu_keyboard = ReplyKeyboardMarkup(resize_keyboard=True)
 menu_keyboard.add(
     KeyboardButton("🆕 Добавить"),
@@ -460,7 +481,14 @@ def process_repeating_interval(message):
     if interval_input == "каждый день":
         interval = "день"
     elif interval_input == "каждую неделю":
-        interval = "неделя"
+    selected_weekdays[message.from_user.id] = []
+    bot.send_message(
+        message.chat.id,
+        "🗓 Выбери дни недели для повтора:\n(нажимай на кнопки, выбранные будут отмечены ✅)",
+        reply_markup=create_weekday_keyboard(message.from_user.id)
+    )
+    return  # не идем дальше
+
     else:
         bot.send_message(message.chat.id, "Непонятный интервал. Попробуйте снова.")
         bot.clear_step_handler_by_chat_id(message.chat.id)
@@ -703,6 +731,68 @@ def handle_confirmation(call):
             elif action == "skip":
                 bot.answer_callback_query(call.id, "🔄 Напоминание останется активным.")
             return
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith("weekday_"))
+def handle_weekday_selection(call):
+    user_id = call.from_user.id
+    selected = selected_weekdays.get(user_id, [])
+    day_index = int(call.data.split("_")[1])
+
+    if day_index in selected:
+        selected.remove(day_index)
+    else:
+        selected.append(day_index)
+
+    selected_weekdays[user_id] = selected
+    bot.edit_message_reply_markup(
+        chat_id=call.message.chat.id,
+        message_id=call.message.message_id,
+        reply_markup=create_weekday_keyboard(user_id)
+    )
+
+@bot.callback_query_handler(func=lambda call: call.data == "weekday_done")
+def handle_weekday_done(call):
+    user_id = call.from_user.id
+    days = sorted(selected_weekdays.get(user_id, []))
+    if not days:
+        return  # ничего не выбрано, игнорируем
+
+    del selected_weekdays[user_id]
+
+    time_str = temp_repeating[user_id]["time_str"]
+    event = temp_repeating[user_id]["event"]
+
+    moscow = timezone('Europe/Moscow')
+    now = datetime.now(moscow)
+    hour, minute = map(int, time_str.split('.'))
+
+    localized_days = ", ".join(DAYS_RU[d] for d in days)
+    job_ids = []
+
+    for d in days:
+        days_ahead = (d - now.weekday()) % 7
+        first_run = datetime.combine(now.date(), datetime(hour, minute).time()) + timedelta(days=days_ahead)
+        first_run = moscow.localize(first_run).astimezone(utc)
+        job_id = str(uuid.uuid4())
+        scheduler.add_job(send_reminder, 'interval', weeks=1, start_date=first_run,
+                          args=[user_id, event, time_str, job_id], id=job_id)
+        job_ids.append(job_id)
+
+    for job_id in job_ids:
+        reminders[user_id].append({
+            "time": datetime.now().astimezone(utc),  # любое значение, просто для сортировки
+            "text": f"{event} 🔁 ({localized_days})",
+            "job_id": job_id,
+            "is_repeating": True,
+            "needs_confirmation": False
+        })
+    save_reminders()
+
+    bot.send_message(
+        call.message.chat.id,
+        f"✅ Повторяющееся напоминание — {event} 🔁 ({localized_days})",
+        reply_markup=menu_keyboard
+    )
 
     
 if __name__ == "__main__":
