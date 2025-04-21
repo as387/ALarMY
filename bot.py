@@ -487,8 +487,7 @@ def process_repeating_interval(message):
             "🗓 Выбери дни недели для повтора:\n(нажимай на кнопки, выбранные будут отмечены ✅)",
             reply_markup=create_weekday_keyboard(message.from_user.id)
         )
-    return  # не идем дальше
-
+        return  # выход после отправки клавиатуры, дальше не идём
     else:
         bot.send_message(message.chat.id, "Непонятный интервал. Попробуйте снова.")
         bot.clear_step_handler_by_chat_id(message.chat.id)
