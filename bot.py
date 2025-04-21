@@ -296,6 +296,7 @@ def show_reminders(message):
 normal = []
 repeating = []
 
+sorted_reminders = sorted(reminders[user_id], key=lambda item: item["time"])
 for rem in sorted_reminders:
     if rem.get("is_repeating"):
         repeating.append(rem)
