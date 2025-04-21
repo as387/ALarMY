@@ -96,14 +96,9 @@ ADMIN_ID = 941791842  # замени на свой Telegram ID
 # Устанавливаем команды для всех пользователей
 bot.set_my_commands([
     BotCommand("start", "Главное меню"),
-    BotCommand("ping", "Проверить, жив ли бот"),
+    BotCommand("ping", "Проверка"),
+    BotCommand("devmode", "Режим разработчика"),  # ← теперь доступна в меню всем
 ])
-
-# Устанавливаем команды только для админа
-bot.set_my_commands(
-    commands=[BotCommand("devmode", "Режим разработчика")],
-    scope=BotCommandScopeChatMember(chat_id=ADMIN_ID, user_id=ADMIN_ID)
-)
 
 
 import json
@@ -143,20 +138,30 @@ def back_to_main_menu(message):
 
 ADMIN_ID = 941791842  # замени на свой
 
-@bot.message_handler(commands=['users'])
+@bot.message_handler(commands=['devmode'])
 def show_users(message):
     if message.from_user.id != ADMIN_ID:
         bot.send_message(message.chat.id, "⛔ Эта команда доступна только администратору.")
         return
 
-    user_list = list(reminders.keys())
-    if not user_list:
-        bot.send_message(message.chat.id, "Никто не пользуется ботом (кроме тебя 🫠).")
+    try:
+        with open("users.json", "r", encoding="utf-8") as f:
+            users = json.load(f)
+    except FileNotFoundError:
+        bot.send_message(message.chat.id, "📂 Нет зарегистрированных пользователей.")
         return
 
-    formatted = "\n".join([f"- {uid}" for uid in user_list])
-    bot.send_message(message.chat.id, f"Пользователи с напоминаниями:\n{formatted}")
+    if not users:
+        bot.send_message(message.chat.id, "😶 Пользователей не найдено.")
+        return
 
+    response = "👥 Пользователи:\n"
+    for uid, data in users.items():
+        name = data.get("first_name", "❓")
+        joined = data.get("joined_at", "время не указано")
+        response += f"\n🆔 {uid} — {name}\n🕒 Зашёл: {joined}\n"
+
+    bot.send_message(message.chat.id, response)
 
 @bot.message_handler(commands=['ping'])
 def test_ping(message):
