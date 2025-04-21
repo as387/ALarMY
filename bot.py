@@ -624,7 +624,7 @@ def send_reminder(user_id, event, time, job_id):
                 reminders[user_id] = [r for r in reminders[user_id] if r["job_id"] != job_id]
                 save_reminders()
 
-async def repeat_reminder_check(reminder: Reminder, context: ContextTypes.DEFAULT_TYPE):
+async def repeat_reminder_check(reminder, context):
     if reminder.confirmed:
         job = scheduler.get_job(f"repeat_{reminder.id}")
         if job:
