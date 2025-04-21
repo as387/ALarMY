@@ -47,6 +47,10 @@ BOT_TOKEN = os.environ.get("BOT_TOKEN")
 bot = telebot.TeleBot(BOT_TOKEN)
 app = Flask(__name__)
 
+@bot.callback_query_handler(func=lambda call: True)
+def debug_all_callbacks(call):
+    print(f"[DEBUG] callback_data получен: {call.data}")
+
 scheduler = BackgroundScheduler()
 scheduler.start()
 reminders = {}
