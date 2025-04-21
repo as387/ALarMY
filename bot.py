@@ -646,48 +646,42 @@ def toggle_repeat_mode(message):
     bot.clear_step_handler_by_chat_id(message.chat.id)
     bot.register_next_step_handler(message, process_repeat_selection)
 
-def process_repeat_selection(message):
-    if message.text == "↩️ Назад в меню":
-        return back_to_main_menu(message)
+sorted_reminders = sorted(reminders[user_id], key=lambda item: item["time"])
+normal = []
+repeating = []
 
-    user_id = message.from_user.id
-    ensure_user_exists(user_id)
+for rem in sorted_reminders:
+    if rem.get("is_repeating"):
+        repeating.append(rem)
+    else:
+        normal.append(rem)
 
-    try:
-        parts = message.text.strip().split()
-        if "/" in parts[-1]:
-            try:
-                custom_interval = int(parts[-1].lstrip("-"))
-                indices = list(map(int, parts[:-1]))
-            except ValueError:
-                bot.send_message(message.chat.id, "Неверный формат интервала. Пример: 1 2 -10", reply_markup=back_to_menu_keyboard())
-                return
-        else:
-            custom_interval = 30
-            indices = list(map(int, parts))
+text = ""
 
-        sorted_reminders = sorted(reminders[user_id], key=lambda item: item["time"])
+if normal:
+    text += "Ваши напоминания:\n"
+    for i, rem in enumerate(normal, start=1):
+        msk_time = rem["time"].astimezone(moscow)
+        line = f"{i}. {msk_time.strftime('%d.%m %H:%M')} — {rem['text']}"
+        if rem.get("needs_confirmation"):
+            interval = rem.get("repeat_interval", 30)
+            line += f", 🚨 ({interval})"
+        text += line + "\n"
 
-        for i in indices:
-            if 0 < i <= len(sorted_reminders):
-                rem = sorted_reminders[i - 1]
-                # Переключаем: если уже был включён — отключаем
-                if rem.get("needs_confirmation"):
-                    rem["needs_confirmation"] = False
-                    rem.pop("repeat_interval", None)
-                else:
-                    rem["needs_confirmation"] = True
-                    rem["repeat_interval"] = custom_interval
+if repeating:
+    text += "Ваши повторяющиеся напоминания:\n"
+    for i, rem in enumerate(repeating, start=1):
+        msk_time = rem["time"].astimezone(moscow)
+        match = re.search(r"\(повт\. (.+?)\)", rem.get("text", ""))
+        interval_text = match.group(1) if match else ""
+        line = f"{i}. {msk_time.strftime('%d.%m %H:%M')} — {rem['text']} 🔁"
+        if interval_text:
+            line += f" ({interval_text})"
+        if rem.get("needs_confirmation"):
+            interval = rem.get("repeat_interval", 30)
+            line += f", 🚨 ({interval})"
+        text += line + "\n"
 
-        save_reminders()
-        bot.send_message(
-            message.chat.id,
-            f"✅ Обновлено! Повтор через {custom_interval} мин. (если включено)",
-            reply_markup=menu_keyboard
-        )
-    except Exception as e:
-        bot.send_message(message.chat.id, "Что-то пошло не так. Проверь формат и попробуй снова.", reply_markup=ReplyKeyboardMarkup())
-        logger.error(f"[REPEAT_SELECTION ERROR] {e}")
 
 @bot.message_handler(commands=['done'])
 def confirm_done(message):
