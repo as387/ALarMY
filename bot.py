@@ -506,20 +506,35 @@ def process_repeating_interval(message):
         first_run_utc = first_run.astimezone(utc)
         job_id = str(uuid.uuid4())
 
+        reminder = {
+            "time": first_run_utc,
+            "text": event + f" (повт. {interval})",
+            "job_id": job_id,
+            "is_repeating": True,
+            "interval": interval,
+            "needs_confirmation": needs_confirmation,
+            "repeat_interval": 30,
+            "id": job_id  # Можно использовать тот же ID
+        }
+        
         if interval == 'день':
             scheduler.add_job(send_reminder, 'interval', days=1, start_date=first_run_utc,
                               args=[user_id, event, time_str, job_id], id=job_id)
         elif interval == 'неделя':
             scheduler.add_job(send_reminder, 'interval', weeks=1, start_date=first_run_utc,
                               args=[user_id, event, time_str, job_id], id=job_id)
-
-        reminders[user_id].append({
-            "time": first_run_utc,
-            "text": event + f" (повт. {interval})",
-            "job_id": job_id,
-            "is_repeating": True,
-            "needs_confirmation": False
-        })
+            if needs_confirmation:
+                scheduler.add_job(
+                    repeat_reminder_check,
+                    'interval',
+                    minutes=reminder["repeat_interval"] or 30,
+                    args=[reminder, context],
+                    id=f"repeat_{reminder['id']}",
+                    replace_existing=True
+                )
+        
+        reminders[user_id].append(reminder)
+        
         save_reminders()
         form = "каждый день" if interval == "день" else "каждую неделю"
         bot.send_message(
@@ -608,6 +623,42 @@ def send_reminder(user_id, event, time, job_id):
             else:
                 reminders[user_id] = [r for r in reminders[user_id] if r["job_id"] != job_id]
                 save_reminders()
+
+async def repeat_reminder_check(reminder: Reminder, context: ContextTypes.DEFAULT_TYPE):
+    if reminder.confirmed:
+        job = scheduler.get_job(f"repeat_{reminder.id}")
+        if job:
+            job.remove()
+        return
+
+    await send_reminder_with_confirmation(reminder, context)
+
+async def send_reminder_with_confirmation(reminder: Reminder, context: ContextTypes.DEFAULT_TYPE):
+    keyboard = [
+        [InlineKeyboardButton("☑️ Подтвердить", callback_data=f"confirm_{reminder.id}")]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await context.bot.send_message(
+        chat_id=reminder.chat_id,
+        text=f"🔔 Напоминание: {reminder.text}",
+        reply_markup=reply_markup
+    )
+
+async def confirm_reminder(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    reminder_id = query.data.split('_')[1]
+    for r in reminders:
+        if str(r.id) == reminder_id:
+            r.confirmed = True
+            job = scheduler.get_job(f"repeat_{r.id}")
+            if job:
+                job.remove()
+            save_reminders()
+            await query.edit_message_text(text=f"✅ Напоминание подтверждено: {r.text}")
+            break
+
 
 @app.route("/", methods=["POST"])
 def telegram_webhook():
@@ -797,6 +848,8 @@ def handle_weekday_done(call):
 if __name__ == "__main__":
     load_reminders()
     restore_jobs()
+
+    application.add_handler(CallbackQueryHandler(confirm_reminder, pattern=r'^confirm_\d+$'))
 
     ping_thread = threading.Thread(target=self_ping)
     ping_thread.daemon = True
