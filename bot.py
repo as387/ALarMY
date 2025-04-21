@@ -481,12 +481,12 @@ def process_repeating_interval(message):
     if interval_input == "каждый день":
         interval = "день"
     elif interval_input == "каждую неделю":
-    selected_weekdays[message.from_user.id] = []
-    bot.send_message(
-        message.chat.id,
-        "🗓 Выбери дни недели для повтора:\n(нажимай на кнопки, выбранные будут отмечены ✅)",
-        reply_markup=create_weekday_keyboard(message.from_user.id)
-    )
+        selected_weekdays[message.from_user.id] = []
+        bot.send_message(
+            message.chat.id,
+            "🗓 Выбери дни недели для повтора:\n(нажимай на кнопки, выбранные будут отмечены ✅)",
+            reply_markup=create_weekday_keyboard(message.from_user.id)
+        )
     return  # не идем дальше
 
     else:
