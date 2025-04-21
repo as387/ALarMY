@@ -9,18 +9,16 @@ import re
 from telebot import types
 from telebot.types import ReplyKeyboardMarkup, KeyboardButton
 
-menu_keyboard = ReplyKeyboardMarkup(
-    keyboard=[
-        [
-            KeyboardButton("➕ Добавить"),
-            KeyboardButton("🔁 Повтор")
-        ],
-        [
-            KeyboardButton("🗑 Удалить"),
-            KeyboardButton("✅ Подтв.")
-        ]
-    ],
-    resize_keyboard=True
+from telebot.types import ReplyKeyboardMarkup, KeyboardButton
+
+menu_keyboard = ReplyKeyboardMarkup(resize_keyboard=True)
+menu_keyboard.add(
+    KeyboardButton("➕ Добавить"),
+    KeyboardButton("🔁 Повтор")
+)
+menu_keyboard.add(
+    KeyboardButton("🗑 Удалить"),
+    KeyboardButton("✅ Подтв.")
 )
 
 temp_repeating = {}
