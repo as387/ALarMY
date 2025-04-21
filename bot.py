@@ -45,13 +45,6 @@ logger = logging.getLogger(__name__)
 
 moscow = timezone('Europe/Moscow')
 
-def main_menu_keyboard():
-    keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    keyboard.add(types.KeyboardButton("Добавить напоминание"))
-    keyboard.add(types.KeyboardButton("Повторяющееся напоминание"))
-    keyboard.add(types.KeyboardButton("Показать напоминания"))
-    return keyboard
-
 def back_to_menu_keyboard():
     keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
     keyboard.add(types.KeyboardButton("↩️ Назад в меню"))
@@ -156,6 +149,7 @@ def start_command(message):
 @bot.message_handler(func=lambda message: message.text == "➕ Добавить")
 def handle_add(message):
     add_reminder(message)  # Вызывает уже существующую функцию
+    print("Добавление нажато")  # или logger.info(...)
 
 @bot.message_handler(func=lambda message: message.text == "🔁 Повтор")
 def handle_repeat(message):
@@ -172,7 +166,7 @@ def handle_confirm(message):
 @bot.message_handler(func=lambda message: message.text == "↩️ Назад в меню")
 def back_to_main_menu(message):
     bot.clear_step_handler_by_chat_id(message.chat.id)
-    bot.send_message(message.chat.id, "Главное меню:", reply_markup=main_menu_keyboard())
+    bot.send_message(message.chat.id, "Главное меню:", reply_markup=ReplyKeyboardMarkup())
 
 ADMIN_ID = 941791842  # замени на свой
 
@@ -345,7 +339,7 @@ def process_reminder(message):
             id=job_id
         )
 
-        bot.send_message(message.chat.id, f"Напоминание на {reminder_datetime_moscow.strftime('%d.%m %H:%M')} (MSK) — {event}", reply_markup=main_menu_keyboard())
+        bot.send_message(message.chat.id, f"Напоминание на {reminder_datetime_moscow.strftime('%d.%m %H:%M')} (MSK) — {event}", reply_markup=ReplyKeyboardMarkup())
 
     except Exception:
         bot.send_message(message.chat.id, "Неверный формат. Попробуйте снова.", reply_markup=back_to_menu_keyboard())
@@ -455,14 +449,14 @@ def process_repeating_interval(message):
         )
     except Exception as e:
         logger.error(f"Ошибка в повторяющемся напоминании: {e}")
-        bot.send_message(message.chat.id, "Что-то пошло не так. Попробуйте снова.", reply_markup=main_menu_keyboard())
+        bot.send_message(message.chat.id, "Что-то пошло не так. Попробуйте снова.", reply_markup=ReplyKeyboardMarkup())
 
 @bot.message_handler(func=lambda message: message.text == "Показать напоминания")
 def show_reminders(message):
     user_id = message.from_user.id
     ensure_user_exists(user_id)
     if not reminders[user_id]:
-        bot.send_message(message.chat.id, "У вас нет активных напоминаний.", reply_markup=main_menu_keyboard())
+        bot.send_message(message.chat.id, "У вас нет активных напоминаний.", reply_markup=ReplyKeyboardMarkup())
         return
 
     sorted_reminders = sorted(reminders[user_id], key=lambda item: item["time"])
@@ -502,7 +496,7 @@ def process_remove_input(message):
                 reply_markup=menu_keyboard
             )
     except Exception:
-        bot.send_message(message.chat.id, "Некорректный ввод, отмена удаления.", reply_markup=main_menu_keyboard())
+        bot.send_message(message.chat.id, "Некорректный ввод, отмена удаления.", reply_markup=ReplyKeyboardMarkup())
 
 def send_reminder(user_id, event, time, job_id):
     logger.info(f"[REMINDER] STARTED for user {user_id} | Event: {event} | Time: {time} | Job ID: {job_id}")
@@ -529,7 +523,7 @@ def send_reminder(user_id, event, time, job_id):
         bot.send_message(
             user_id,
             f"🔔 Напоминание: {event} (в {reminder_time_msk} по МСК){text_suffix}",
-            reply_markup=keyboard or main_menu_keyboard()
+            reply_markup=keyboard or ReplyKeyboardMarkup()
         )
 
         logger.info(f"[REMINDER] Sent to user {user_id}")
@@ -589,7 +583,7 @@ def toggle_repeat_mode(message):
     ensure_user_exists(user_id)
 
     if not reminders[user_id]:
-        bot.send_message(message.chat.id, "У вас нет активных напоминаний.", reply_markup=main_menu_keyboard())
+        bot.send_message(message.chat.id, "У вас нет активных напоминаний.", reply_markup=ReplyKeyboardMarkup())
         return
 
     sorted_reminders = sorted(reminders[user_id], key=lambda item: item["time"])
@@ -635,7 +629,7 @@ def process_repeat_selection(message):
             reply_markup=menu_keyboard
         )
     except Exception as e:
-        bot.send_message(message.chat.id, "Что-то пошло не так. Проверь формат и попробуй снова.", reply_markup=main_menu_keyboard())
+        bot.send_message(message.chat.id, "Что-то пошло не так. Проверь формат и попробуй снова.", reply_markup=ReplyKeyboardMarkup())
         logger.error(f"[REPEAT_SELECTION ERROR] {e}")
 
 @bot.message_handler(commands=['done'])
