@@ -7,6 +7,21 @@ import logging
 import uuid
 import re
 from telebot import types
+from telebot.types import ReplyKeyboardMarkup, KeyboardButton
+
+menu_keyboard = ReplyKeyboardMarkup(
+    keyboard=[
+        [
+            KeyboardButton("➕ Добавить"),
+            KeyboardButton("🔁 Повтор")
+        ],
+        [
+            KeyboardButton("🗑 Удалить"),
+            KeyboardButton("✅ Подтв.")
+        ]
+    ],
+    resize_keyboard=True
+)
 
 temp_repeating = {}
 
@@ -128,8 +143,7 @@ def start_command(message):
     ensure_user_exists(user_id)
     save_user_info(message.from_user)
     bot.clear_step_handler_by_chat_id(message.chat.id)
-    bot.send_message(message.chat.id, "ЙОУ! Выберите действие:", reply_markup=main_menu_keyboard())
-
+    bot.send_message(message.chat.id, "ЙОУ! Выберите действие:", reply_markup=menu_keyboard)
 
 @bot.message_handler(func=lambda message: message.text == "↩️ Назад в меню")
 def back_to_main_menu(message):
