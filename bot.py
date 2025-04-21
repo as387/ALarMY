@@ -210,7 +210,7 @@ def show_users(message):
     for uid, data in users.items():
         name = data.get("first_name", "❓")
         joined = data.get("joined_at", "время не указано")
-        response += f"\n🆔 {uid} — {name}\n🕒 Зашёл: {joined}\n"
+        response += f"{uname if uname != '(без username)' else name}, [{joined}]\n"
 
     bot.send_message(message.chat.id, response)
 
@@ -292,20 +292,40 @@ def show_reminders(message):
     sorted_reminders = sorted(reminders[user_id], key=lambda item: item["time"])
     text = "Ваши напоминания:\n"
 
-    for i, rem in enumerate(sorted_reminders, start=1):
+    sorted_reminders = sorted(reminders[user_id], key=lambda item: item["time"])
+normal = []
+repeating = []
+
+for rem in sorted_reminders:
+    if rem.get("is_repeating"):
+        repeating.append(rem)
+    else:
+        normal.append(rem)
+
+text = ""
+
+if normal:
+    text += "Ваши напоминания:\n"
+    for i, rem in enumerate(normal, start=1):
         msk_time = rem["time"].astimezone(moscow)
         line = f"{i}. {msk_time.strftime('%d.%m %H:%M')} — {rem['text']}"
-
-        if rem.get("is_repeating"):
-            match = re.search(r"\(повт\. (.+?)\)", rem.get("text", ""))
-            if match:
-                interval_text = match.group(1)
-                line += f" 🔁 ({interval_text})"
-
         if rem.get("needs_confirmation"):
             interval = rem.get("repeat_interval", 30)
             line += f", 🚨 ({interval})"
+        text += line + "\n"
 
+if repeating:
+    text += "Ваши повторяющиеся напоминания:\n"
+    for i, rem in enumerate(repeating, start=1):
+        msk_time = rem["time"].astimezone(moscow)
+        match = re.search(r"\(повт\. (.+?)\)", rem.get("text", ""))
+        interval_text = match.group(1) if match else ""
+        line = f"{i}. {msk_time.strftime('%d.%m %H:%M')} — {rem['text']} 🔁"
+        if interval_text:
+            line += f" ({interval_text})"
+        if rem.get("needs_confirmation"):
+            interval = rem.get("repeat_interval", 30)
+            line += f", 🚨 ({interval})"
         text += line + "\n"
 
     keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
@@ -635,8 +655,16 @@ def process_repeat_selection(message):
 
     try:
         parts = message.text.strip().split()
-        indices = list(map(int, [x for x in parts if x.isdigit()]))
-        custom_interval = int(parts[-1]) if len(parts) >= 2 and parts[-1].isdigit() else 30
+        if "/" in parts[-1]:
+            try:
+                custom_interval = int(parts[-1].lstrip("-"))
+                indices = list(map(int, parts[:-1]))
+            except ValueError:
+                bot.send_message(message.chat.id, "Неверный формат интервала. Пример: 1 2 -10", reply_markup=back_to_menu_keyboard())
+                return
+        else:
+            custom_interval = 30
+            indices = list(map(int, parts))
 
         sorted_reminders = sorted(reminders[user_id], key=lambda item: item["time"])
 
