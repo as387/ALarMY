@@ -89,10 +89,22 @@ def ensure_user_exists(user_id):
         reminders[user_id] = []
 
 
+from telebot.types import BotCommand, BotCommandScopeChatMember
+
+ADMIN_ID = 941791842  # замени на свой Telegram ID
+
+# Устанавливаем команды для всех пользователей
 bot.set_my_commands([
-    telebot.types.BotCommand("start", "Главное меню"),
-    telebot.types.BotCommand("ping", "Проверить, жив ли бот"),
+    BotCommand("start", "Главное меню"),
+    BotCommand("ping", "Проверить, жив ли бот"),
 ])
+
+# Устанавливаем команды только для админа
+bot.set_my_commands(
+    commands=[BotCommand("devmode", "Режим разработчика")],
+    scope=BotCommandScopeChatMember(chat_id=ADMIN_ID, user_id=ADMIN_ID)
+)
+
 
 import json
 from datetime import datetime
@@ -231,6 +243,7 @@ def process_reminder(message):
             "text": event,
             "job_id": job_id,
             "is_repeating": False
+            "needs_confirmation": False
         })
         save_reminders()
 
@@ -342,6 +355,7 @@ def process_repeating_interval(message):
             "text": event + f" (повт. {interval})",
             "job_id": job_id,
             "is_repeating": True
+            "needs_confirmation": False
         })
         save_reminders()
 
@@ -364,7 +378,9 @@ def show_reminders(message):
     text = "Ваши напоминания:\n"
     for i, rem in enumerate(sorted_reminders, start=1):
         msk_time = rem["time"].astimezone(moscow)
-        text += f"{i}. {msk_time.strftime('%d.%m %H:%M')} - {rem['text']}\n"
+        repeat_icon = "🔁" if rem.get("is_repeating") else ""
+        confirm_icon = "☑️" if rem.get("needs_confirmation") else ""
+        text += f"{i}. {msk_time.strftime('%d.%m %H:%M')} - {rem['text']} {repeat_icon}{confirm_icon}\n"
     text += "\nВведите номера напоминаний для удаления (через пробел):"
 
     bot.send_message(message.chat.id, text, reply_markup=back_to_menu_keyboard())
@@ -401,13 +417,35 @@ def send_reminder(user_id, event, time, job_id):
         reminder_time_utc = datetime.utcnow()
         reminder_time_msk = utc.localize(reminder_time_utc).astimezone(moscow).strftime('%H:%M')
 
-        bot.send_message(user_id, f"🔔 Напоминание: {event} (в {reminder_time_msk} по МСК)", reply_markup=main_menu_keyboard())
+        bot.send_message(
+            user_id,
+            f"🔔 Напоминание: {event} (в {reminder_time_msk} по МСК)\n\nЕсли выполнено — напиши /done {job_id}",
+            reply_markup=main_menu_keyboard()
+        )
         logger.info(f"[REMINDER] Sent to user {user_id}")
     except Exception as e:
         logger.error(f"[REMINDER ERROR] {e}")
 
-    if user_id in reminders:
-        reminders[user_id] = [rem for rem in reminders[user_id] if rem["job_id"] != job_id or rem["is_repeating"]]
+    for rem in reminders.get(user_id, []):
+        if rem["job_id"] == job_id:
+            if rem.get("is_repeating"):
+                return  # Повторяющееся само себе продолжит
+            if rem.get("needs_confirmation"):
+                # Перезапуск через repeat_interval минут
+                interval = rem.get("repeat_interval", 30)
+                new_job_id = str(uuid.uuid4())
+                scheduler.add_job(
+                    send_reminder,
+                    trigger='date',
+                    run_date=datetime.utcnow() + timedelta(minutes=interval),
+                    args=[user_id, event, time, new_job_id],
+                    id=new_job_id
+                )
+                rem["job_id"] = new_job_id
+                save_reminders()
+            else:
+                reminders[user_id] = [r for r in reminders[user_id] if r["job_id"] != job_id]
+                save_reminders()
 
 @app.route("/", methods=["POST"])
 def telegram_webhook():
@@ -434,6 +472,58 @@ def self_ping():
         except Exception as e:
             print(f"[PING ERROR] {e}")
         sleep(60)
+
+@bot.message_handler(commands=['repeat'])
+def toggle_repeat_mode(message):
+    user_id = message.from_user.id
+    ensure_user_exists(user_id)
+
+    if not reminders[user_id]:
+        bot.send_message(message.chat.id, "У вас нет активных напоминаний.", reply_markup=main_menu_keyboard())
+        return
+
+    sorted_reminders = sorted(reminders[user_id], key=lambda item: item["time"])
+    text = "Введите номера напоминаний, для которых включить/отключить повтор через 30 мин:\n\n"
+    for i, rem in enumerate(sorted_reminders, 1):
+        status = "✅" if rem.get("needs_confirmation") else "❌"
+        text += f"{i}. {rem['text']} — {status}\n"
+
+    text += "\nПример: 1 3 5 — чтобы переключить поведение этих напоминаний."
+    bot.send_message(message.chat.id, text, reply_markup=back_to_menu_keyboard())
+    bot.clear_step_handler_by_chat_id(message.chat.id)
+    bot.register_next_step_handler(message, process_repeat_selection)
+
+def process_repeat_selection(message):
+    if message.text == "↩️ Назад в меню":
+        return back_to_main_menu(message)
+
+    user_id = message.from_user.id
+    ensure_user_exists(user_id)
+
+    try:
+        parts = message.text.strip().split()
+        indices = list(map(int, [x for x in parts if x.isdigit()]))
+        custom_interval = int(parts[-1]) if len(parts) >= 2 and parts[-1].isdigit() else 30
+
+        sorted_reminders = sorted(reminders[user_id], key=lambda item: item["time"])
+
+        for i in indices:
+            if 0 < i <= len(sorted_reminders):
+                rem = sorted_reminders[i - 1]
+                # Переключаем: если уже был включён — отключаем
+                if rem.get("needs_confirmation"):
+                    rem["needs_confirmation"] = False
+                    rem.pop("repeat_interval", None)
+                else:
+                    rem["needs_confirmation"] = True
+                    rem["repeat_interval"] = custom_interval
+
+        save_reminders()
+        bot.send_message(message.chat.id, f"Обновлено! Повтор будет через {custom_interval} минут (если включено).", reply_markup=main_menu_keyboard())
+    except Exception as e:
+        bot.send_message(message.chat.id, "Что-то пошло не так. Проверь формат и попробуй снова.", reply_markup=main_menu_keyboard())
+        logger.error(f"[REPEAT_SELECTION ERROR] {e}")
+
 
 if __name__ == "__main__":
     load_reminders()
