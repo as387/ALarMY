@@ -11,10 +11,6 @@ from telebot.types import ReplyKeyboardMarkup, KeyboardButton
 
 from telebot.types import ReplyKeyboardMarkup, KeyboardButton
 
-import logging
-logging.basicConfig(level=logging.DEBUG)
-
-
 selected_weekdays = {}
 DAYS_RU = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"]
 
@@ -175,14 +171,10 @@ def start_command(message):
     )
 
 @bot.message_handler(func=lambda message: message.text == "🆕 Добавить")
-def handle_add(message):
-    prompt_add_reminder(message)
-    print("Добавление нажато")  # или logger.info(...)
 
-def prompt_add_reminder(message):
-    bot.send_message(message.chat.id, "Введите напоминание в формате ЧЧ.ММ *событие* или ДД.ММ ЧЧ.ММ *событие*.", reply_markup=back_to_menu_keyboard())
-    bot.clear_step_handler_by_chat_id(message.chat.id)
-    bot.register_next_step_handler(message, process_reminder)
+def handle_add(message):
+    add_reminder(message)  # Вызывает уже существующую функцию
+    print("Добавление нажато")  # или logger.info(...)
 
 @bot.message_handler(func=lambda message: message.text == "🔁 Повтор")
 def handle_repeat(message):
@@ -259,6 +251,12 @@ def dump_reminders(message):
         bot.send_message(message.chat.id, f"```json\n{data}\n```", parse_mode="Markdown")
     except FileNotFoundError:
         bot.send_message(message.chat.id, "Файл reminders.json не найден.")
+
+@bot.message_handler(func=lambda message: message.text == "Добавить напоминание")
+def add_reminder(message):
+    bot.send_message(message.chat.id, "Введите напоминание в формате ЧЧ.ММ *событие* или ДД.ММ ЧЧ.ММ *событие*.", 	reply_markup=back_to_menu_keyboard())
+    bot.clear_step_handler_by_chat_id(message.chat.id)
+    bot.register_next_step_handler(message, process_reminder)
 
 def process_reminder(message):
     if message.text == "↩️ Назад в меню":
@@ -516,7 +514,7 @@ def process_repeating_interval(message):
             "job_id": job_id,
             "is_repeating": True,
             "interval": interval,
-            "needs_confirmation": False,  # или True, если нужно по умолчанию
+            "needs_confirmation": needs_confirmation,
             "repeat_interval": 30,
             "id": job_id  # Можно использовать тот же ID
         }
@@ -867,16 +865,7 @@ def handle_weekday_done(call):
         logger.error(f"Ошибка в handle_weekday_done: {e}")
         bot.send_message(chat_id, "Ошибка при создании напоминания. Попробуйте снова.", reply_markup=menu_keyboard)
     
-@bot.callback_query_handler(func=lambda call: True)
-def fallback_handler(call):
-    print(f"[FALLBACK] Необработанная кнопка: {call.data}")
-    bot.answer_callback_query(call.id, "🤖 Бот получил кнопку, но не понял её.")
-
 if __name__ == "__main__":
-    bot.remove_webhook()
-    sleep(1)  # пауза 1 сек
-    bot.set_webhook(url=WEBHOOK_URL)
-    
     load_reminders()
     restore_jobs()
 
