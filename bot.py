@@ -13,7 +13,7 @@ from telebot.types import ReplyKeyboardMarkup, KeyboardButton
 
 menu_keyboard = ReplyKeyboardMarkup(resize_keyboard=True)
 menu_keyboard.add(
-    KeyboardButton("➕ Добавить"),
+    KeyboardButton("🆕 Добавить"),
     KeyboardButton("🔁 Повтор")
 )
 menu_keyboard.add(
@@ -142,6 +142,22 @@ def start_command(message):
     save_user_info(message.from_user)
     bot.clear_step_handler_by_chat_id(message.chat.id)
     bot.send_message(message.chat.id, "ЙОУ! Выберите действие:", reply_markup=menu_keyboard)
+
+@bot.message_handler(func=lambda message: message.text == "➕ Добавить")
+def handle_add(message):
+    add_reminder(message)  # Вызывает уже существующую функцию
+
+@bot.message_handler(func=lambda message: message.text == "🔁 Повтор")
+def handle_repeat(message):
+    add_repeating_reminder(message)
+
+@bot.message_handler(func=lambda message: message.text == "🗑 Удалить")
+def handle_delete(message):
+    show_reminders(message)
+
+@bot.message_handler(func=lambda message: message.text == "✅ Подтв.")
+def handle_confirm(message):
+    toggle_repeat_mode(message)
 
 @bot.message_handler(func=lambda message: message.text == "↩️ Назад в меню")
 def back_to_main_menu(message):
