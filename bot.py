@@ -11,27 +11,6 @@ from telebot.types import ReplyKeyboardMarkup, KeyboardButton
 
 from telebot.types import ReplyKeyboardMarkup, KeyboardButton
 
-selected_weekdays = {}
-DAYS_RU = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"]
-
-
-def create_weekday_keyboard(user_id):
-    selected = selected_weekdays.get(user_id, [])
-    keyboard = types.InlineKeyboardMarkup(row_width=4)
-    buttons = []
-
-    for i, day in enumerate(DAYS_RU):
-        prefix = "✅ " if i in selected else ""
-        buttons.append(types.InlineKeyboardButton(f"{prefix}{day}", callback_data=f"weekday_{i}"))
-
-    keyboard.add(*buttons)
-    if selected:
-        keyboard.add(types.InlineKeyboardButton("✅ Готово", callback_data="weekday_done"))
-    else:
-        keyboard.add(types.InlineKeyboardButton("🔒 Готово", callback_data="disabled"))
-
-    return keyboard
-
 menu_keyboard = ReplyKeyboardMarkup(resize_keyboard=True)
 menu_keyboard.add(
     KeyboardButton("🆕 Добавить"),
@@ -46,10 +25,6 @@ temp_repeating = {}
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 bot = telebot.TeleBot(BOT_TOKEN)
 app = Flask(__name__)
-
-@bot.callback_query_handler(func=lambda call: True)
-def debug_all_callbacks(call):
-    print(f"[DEBUG] callback_data получен: {call.data}")
 
 scheduler = BackgroundScheduler()
 scheduler.start()
@@ -192,7 +167,8 @@ def handle_delete(message):
     bot.send_message(message.chat.id, "Введите номера напоминаний для удаления (через пробел):", reply_markup=back_to_menu_keyboard())
     bot.clear_step_handler_by_chat_id(message.chat.id)
     bot.register_next_step_handler(message, process_remove_input)
-    
+
+
 @bot.message_handler(func=lambda message: message.text == "✅ Подтв.")
 def handle_confirm(message):
     user_id = message.from_user.id
@@ -474,6 +450,8 @@ def process_repeating_interval(message):
     
     time_str = data["time_str"]
     event = data["event"]
+    del temp_repeating[user_id]  # Удалить после использования
+
     
     user_id = message.from_user.id
     ensure_user_exists(user_id)
@@ -483,13 +461,7 @@ def process_repeating_interval(message):
     if interval_input == "каждый день":
         interval = "день"
     elif interval_input == "каждую неделю":
-        selected_weekdays[message.from_user.id] = []
-        bot.send_message(
-            message.chat.id,
-            "🗓 Выбери дни недели для повтора:\n(нажимай на кнопки, выбранные будут отмечены ✅)",
-            reply_markup=create_weekday_keyboard(message.from_user.id)
-        )
-        return  # выход после отправки клавиатуры, дальше не идём
+        interval = "неделя"
     else:
         bot.send_message(message.chat.id, "Непонятный интервал. Попробуйте снова.")
         bot.clear_step_handler_by_chat_id(message.chat.id)
@@ -508,49 +480,36 @@ def process_repeating_interval(message):
         first_run_utc = first_run.astimezone(utc)
         job_id = str(uuid.uuid4())
 
-        reminder = {
-            "time": first_run_utc,
-            "text": event + f" (повт. {interval})",
-            "job_id": job_id,
-            "is_repeating": True,
-            "interval": interval,
-            "needs_confirmation": needs_confirmation,
-            "repeat_interval": 30,
-            "id": job_id  # Можно использовать тот же ID
-        }
-        
         if interval == 'день':
             scheduler.add_job(send_reminder, 'interval', days=1, start_date=first_run_utc,
                               args=[user_id, event, time_str, job_id], id=job_id)
         elif interval == 'неделя':
             scheduler.add_job(send_reminder, 'interval', weeks=1, start_date=first_run_utc,
                               args=[user_id, event, time_str, job_id], id=job_id)
-            if needs_confirmation:
-                scheduler.add_job(
-                    repeat_reminder_check,
-                    'interval',
-                    minutes=reminder["repeat_interval"] or 30,
-                    args=[reminder, context],
-                    id=f"repeat_{reminder['id']}",
-                    replace_existing=True
-                )
-        
-        reminders[user_id].append(reminder)
-        
+
+        reminders[user_id].append({
+            "time": first_run_utc,
+            "text": event + f" (повт. {interval})",
+            "job_id": job_id,
+            "is_repeating": True,
+            "needs_confirmation": False
+        })
         save_reminders()
-        form = "каждый день" if interval == "день" else "каждую неделю"
+        
+        if interval == "день":
+            form = "каждый день"
+        else:
+            form = "каждую неделю"
+        
         bot.send_message(
             message.chat.id,
             f"✅ Повторяющееся напоминание на {first_run.strftime('%d.%m %H:%M')} (MSK) — {event} {form}",
             reply_markup=menu_keyboard
         )
 
-        
     except Exception as e:
         logger.error(f"Ошибка в повторяющемся напоминании: {e}")
         bot.send_message(message.chat.id, "Что-то пошло не так. Попробуйте снова.", reply_markup=ReplyKeyboardMarkup())
-
-    del temp_repeating[user_id]
 
 def process_remove_input(message):
 
@@ -627,42 +586,6 @@ def send_reminder(user_id, event, time, job_id):
             else:
                 reminders[user_id] = [r for r in reminders[user_id] if r["job_id"] != job_id]
                 save_reminders()
-
-async def repeat_reminder_check(reminder, context):
-    if reminder.confirmed:
-        job = scheduler.get_job(f"repeat_{reminder.id}")
-        if job:
-            job.remove()
-        return
-
-    await send_reminder_with_confirmation(reminder, context)
-
-async def send_reminder_with_confirmation(reminder, context):
-    keyboard = [
-        [InlineKeyboardButton("☑️ Подтвердить", callback_data=f"confirm_{reminder.id}")]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    await context.bot.send_message(
-        chat_id=reminder.chat_id,
-        text=f"🔔 Напоминание: {reminder.text}",
-        reply_markup=reply_markup
-    )
-
-async def confirm_reminder(update, context):
-    query = update.callback_query
-    await query.answer()
-
-    reminder_id = query.data.split('_')[1]
-    for r in reminders:
-        if str(r.id) == reminder_id:
-            r.confirmed = True
-            job = scheduler.get_job(f"repeat_{r.id}")
-            if job:
-                job.remove()
-            save_reminders()
-            await query.edit_message_text(text=f"✅ Напоминание подтверждено: {r.text}")
-            break
-
 
 @app.route("/", methods=["POST"])
 def telegram_webhook():
@@ -786,84 +709,6 @@ def handle_confirmation(call):
                 bot.answer_callback_query(call.id, "🔄 Напоминание останется активным.")
             return
 
-@bot.callback_query_handler(func=lambda call: call.data.startswith("weekday_"))
-def handle_weekday_selection(call):
-    user_id = call.from_user.id
-    selected = selected_weekdays.get(user_id, [])
-    day_index = int(call.data.split("_")[1])
-
-    if day_index in selected:
-        selected.remove(day_index)
-    else:
-        selected.append(day_index)
-
-    selected_weekdays[user_id] = selected
-    bot.edit_message_reply_markup(
-        chat_id=call.message.chat.id,
-        message_id=call.message.message_id,
-        reply_markup=create_weekday_keyboard(user_id)
-    )
-
-@bot.callback_query_handler(func=lambda call: call.data == "weekday_done")
-def handle_weekday_done(call):
-    print("НАЖАЛИ ГОТОВО!")
-
-    user_id = call.from_user.id
-    chat_id = call.message.chat.id
-    selected = selected_weekdays.get(user_id, [])
-    temp = temp_repeating.get(user_id)
-
-    if not selected or not temp:
-        bot.answer_callback_query(call.id, "Выберите хотя бы один день.")
-        return
-
-    try:
-        hour, minute = map(int, temp["time_str"].split("."))
-        moscow = timezone('Europe/Moscow')
-        now = datetime.now(moscow)
-        event = temp["event"]
-        day_names = [DAYS_RU[i].lower()[:2] for i in selected]
-        day_str = ", ".join(day_names)
-
-        ensure_user_exists(user_id)
-        created_times = []
-
-        for weekday in selected:
-            # вычисляем ближайшую дату выбранного дня недели
-            days_ahead = (weekday - now.weekday() + 7) % 7
-            target_date = now + timedelta(days=days_ahead)
-            reminder_time = moscow.localize(datetime.combine(target_date.date(), datetime.strptime(temp["time_str"], "%H.%M").time()))
-            reminder_utc = reminder_time.astimezone(utc)
-            job_id = str(uuid.uuid4())
-
-            scheduler.add_job(send_reminder, 'interval', weeks=1, start_date=reminder_utc,
-                              args=[user_id, event, temp["time_str"], job_id], id=job_id)
-
-            reminders[user_id].append({
-                "time": reminder_utc,
-                "text": f"{event} (повт. неделя {DAYS_RU[weekday].lower()[:2]})",
-                "job_id": job_id,
-                "is_repeating": True,
-                "needs_confirmation": False
-            })
-            created_times.append(reminder_time.strftime('%a %H:%M'))
-
-        save_reminders()
-
-        bot.edit_message_text(
-            f"✅ Напоминание «{event}» будет повторяться каждую неделю в: {', '.join(created_times)}",
-            chat_id=chat_id,
-            message_id=call.message.message_id,
-            reply_markup=None
-        )
-        bot.send_message(chat_id, "Главное меню:", reply_markup=menu_keyboard)
-
-        del selected_weekdays[user_id]
-        del temp_repeating[user_id]
-
-    except Exception as e:
-        logger.error(f"Ошибка в handle_weekday_done: {e}")
-        bot.send_message(chat_id, "Ошибка при создании напоминания. Попробуйте снова.", reply_markup=menu_keyboard)
     
 if __name__ == "__main__":
     load_reminders()
