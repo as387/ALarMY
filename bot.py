@@ -242,7 +242,7 @@ def process_reminder(message):
             "time": reminder_datetime,
             "text": event,
             "job_id": job_id,
-            "is_repeating": False
+            "is_repeating": False,
             "needs_confirmation": False
         })
         save_reminders()
@@ -354,7 +354,7 @@ def process_repeating_interval(message):
             "time": first_run_utc,
             "text": event + f" (повт. {interval})",
             "job_id": job_id,
-            "is_repeating": True
+            "is_repeating": True,
             "needs_confirmation": False
         })
         save_reminders()
@@ -417,11 +417,28 @@ def send_reminder(user_id, event, time, job_id):
         reminder_time_utc = datetime.utcnow()
         reminder_time_msk = utc.localize(reminder_time_utc).astimezone(moscow).strftime('%H:%M')
 
+        from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
+        
+        keyboard = None
+        text_suffix = ""
+        
+        # Добавляем кнопки только если нужно подтверждение
+        for rem in reminders.get(user_id, []):
+            if rem["job_id"] == job_id and rem.get("needs_confirmation"):
+                keyboard = InlineKeyboardMarkup()
+                keyboard.row(
+                    InlineKeyboardButton("✅ Подтвердить", callback_data=f"confirm:{job_id}"),
+                    InlineKeyboardButton("🚫 Пропустить", callback_data=f"skip:{job_id}")
+                )
+                text_suffix = "\n\nНажмите, если выполнили:"
+                break
+        
         bot.send_message(
             user_id,
-            f"🔔 Напоминание: {event} (в {reminder_time_msk} по МСК)\n\nЕсли выполнено — напиши /done {job_id}",
-            reply_markup=main_menu_keyboard()
+            f"🔔 Напоминание: {event} (в {reminder_time_msk} по МСК){text_suffix}",
+            reply_markup=keyboard or main_menu_keyboard()
         )
+
         logger.info(f"[REMINDER] Sent to user {user_id}")
     except Exception as e:
         logger.error(f"[REMINDER ERROR] {e}")
@@ -524,7 +541,55 @@ def process_repeat_selection(message):
         bot.send_message(message.chat.id, "Что-то пошло не так. Проверь формат и попробуй снова.", reply_markup=main_menu_keyboard())
         logger.error(f"[REPEAT_SELECTION ERROR] {e}")
 
+@bot.message_handler(commands=['done'])
+def confirm_done(message):
+    parts = message.text.strip().split()
+    if len(parts) != 2:
+        bot.send_message(message.chat.id, "Формат: /done <job_id>")
+        return
 
+    job_id = parts[1]
+    user_id = message.from_user.id
+    ensure_user_exists(user_id)
+
+    for rem in reminders[user_id]:
+        if rem["job_id"] == job_id:
+            rem["needs_confirmation"] = False
+            rem.pop("repeat_interval", None)
+            try:
+                scheduler.remove_job(job_id)
+            except:
+                pass
+            save_reminders()
+            bot.send_message(message.chat.id, f"✅ Напоминание «{rem['text']}» подтверждено и больше не будет повторяться.")
+            return
+
+    bot.send_message(message.chat.id, "❌ Напоминание не найдено или уже подтверждено.")
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith("confirm:") or call.data.startswith("skip:"))
+def handle_confirmation(call):
+    user_id = call.from_user.id
+    ensure_user_exists(user_id)
+    action, job_id = call.data.split(":")
+
+    for rem in reminders[user_id]:
+        if rem["job_id"] == job_id:
+            if action == "confirm":
+                rem["needs_confirmation"] = False
+                rem.pop("repeat_interval", None)
+                try:
+                    scheduler.remove_job(job_id)
+                except:
+                    pass
+                save_reminders()
+                bot.answer_callback_query(call.id, "✅ Подтверждено!")
+                bot.edit_message_reply_markup(call.message.chat.id, call.message.message_id, reply_markup=None)
+                bot.send_message(user_id, f"Напоминание «{rem['text']}» отмечено как выполненное.")
+            elif action == "skip":
+                bot.answer_callback_query(call.id, "🔄 Напоминание останется активным.")
+            return
+
+    
 if __name__ == "__main__":
     load_reminders()
     restore_jobs()
