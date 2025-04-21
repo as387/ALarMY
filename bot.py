@@ -496,7 +496,12 @@ def process_repeating_interval(message):
         save_reminders()
         bot.send_message(
             message.chat.id,
-            f"✅ Повторяющееся напоминание на {first_run.strftime('%d.%m %H:%M')} (MSK) — {event} каждую {interval}",
+            form = "день" if interval == "день" else "неделю"
+            bot.send_message(
+                message.chat.id,
+                f"✅ Повторяющееся напоминание на {first_run.strftime('%d.%m %H:%M')} (MSK) — {event} каждую {form}",
+                reply_markup=menu_keyboard
+            )
             reply_markup=menu_keyboard
         )
     except Exception as e:
@@ -519,13 +524,10 @@ def process_remove_input(message):
                 if job.id == rem["job_id"]:
                     job.remove()
             reminders[user_id].remove(rem)
-            save_reminders()
+        
+        save_reminders()
+        bot.send_message(message.chat.id, "✅ Напоминания удалены.", reply_markup=menu_keyboard)
 
-            bot.send_message(
-                message.chat.id,
-                "🗑 Напоминания удалены.",
-                reply_markup=menu_keyboard
-            )
     except Exception:
         bot.send_message(message.chat.id, "Некорректный ввод, отмена удаления.", reply_markup=ReplyKeyboardMarkup())
 
