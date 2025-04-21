@@ -94,17 +94,57 @@ bot.set_my_commands([
     telebot.types.BotCommand("ping", "Проверить, жив ли бот"),
 ])
 
+import json
+from datetime import datetime
+
+def save_user_info(user):
+    try:
+        with open("users.json", "r", encoding="utf-8") as f:
+            users = json.load(f)
+    except FileNotFoundError:
+        users = {}
+
+    user_id = str(user.id)
+    if user_id not in users:
+        users[user_id] = {
+            "username": user.username,
+            "first_name": user.first_name,
+            "last_name": user.last_name,
+            "joined_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        }
+        with open("users.json", "w", encoding="utf-8") as f:
+            json.dump(users, f, ensure_ascii=False, indent=2)
+
 @bot.message_handler(commands=['start'])
 def start_command(message):
     user_id = message.from_user.id
     ensure_user_exists(user_id)
-    bot.clear_step_handler_by_chat_id(message.chat.id)  # 👈 вот эта строка
+    save_user_info(message.from_user)
+    bot.clear_step_handler_by_chat_id(message.chat.id)
     bot.send_message(message.chat.id, "ЙОУ! Выберите действие:", reply_markup=main_menu_keyboard())
+
 
 @bot.message_handler(func=lambda message: message.text == "↩️ Назад в меню")
 def back_to_main_menu(message):
     bot.clear_step_handler_by_chat_id(message.chat.id)
     bot.send_message(message.chat.id, "Главное меню:", reply_markup=main_menu_keyboard())
+
+ADMIN_ID = 941791842  # замени на свой
+
+@bot.message_handler(commands=['users'])
+def show_users(message):
+    if message.from_user.id != ADMIN_ID:
+        bot.send_message(message.chat.id, "⛔ Эта команда доступна только администратору.")
+        return
+
+    user_list = list(reminders.keys())
+    if not user_list:
+        bot.send_message(message.chat.id, "Никто не пользуется ботом (кроме тебя 🫠).")
+        return
+
+    formatted = "\n".join([f"- {uid}" for uid in user_list])
+    bot.send_message(message.chat.id, f"Пользователи с напоминаниями:\n{formatted}")
+
 
 @bot.message_handler(commands=['ping'])
 def test_ping(message):
@@ -125,6 +165,35 @@ def add_reminder(message):
     bot.send_message(message.chat.id, "Введите напоминание в формате ЧЧ.ММ *событие* или ДД.ММ ЧЧ.ММ *событие*.", 	reply_markup=back_to_menu_keyboard())
     bot.clear_step_handler_by_chat_id(message.chat.id)
     bot.register_next_step_handler(message, process_reminder)
+
+ADMIN_ID = 941791842  # замени на свой Telegram ID
+
+@bot.message_handler(commands=['devmode'])
+def show_users(message):
+    if message.from_user.id != ADMIN_ID:
+        bot.send_message(message.chat.id, "⛔ Эта команда доступна только администратору.")
+        return
+
+    try:
+        with open("users.json", "r", encoding="utf-8") as f:
+            users = json.load(f)
+    except FileNotFoundError:
+        bot.send_message(message.chat.id, "📂 Нет зарегистрированных пользователей.")
+        return
+
+    if not users:
+        bot.send_message(message.chat.id, "😶 Пользователей не найдено.")
+        return
+
+    response = "👥 Пользователи:\n"
+    for uid, data in users.items():
+        name = f"{data.get('first_name', '')} {data.get('last_name', '')}".strip()
+        uname = f"@{data['username']}" if data.get('username') else "(без username)"
+        joined = data.get('joined_at', 'время не указано')
+        response += f"\n🆔 {uid} — {name} {uname}\n🕒 Зашёл: {joined}\n"
+
+    bot.send_message(message.chat.id, response)
+
 
 def process_reminder(message):
     if message.text == "↩️ Назад в меню":
