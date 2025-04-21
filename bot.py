@@ -872,8 +872,11 @@ def fallback_handler(call):
     print(f"[FALLBACK] Необработанная кнопка: {call.data}")
     bot.answer_callback_query(call.id, "🤖 Бот получил кнопку, но не понял её.")
 
-
 if __name__ == "__main__":
+    bot.remove_webhook()
+    sleep(1)  # пауза 1 сек
+    bot.set_webhook(url=WEBHOOK_URL)
+    
     load_reminders()
     restore_jobs()
 
