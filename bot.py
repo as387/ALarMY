@@ -242,6 +242,11 @@ def show_users(message):
 
     bot.send_message(message.chat.id, response)
 
+@bot.callback_query_handler(func=lambda call: True)
+def test_all_callbacks(call):
+    print(f"Нажата кнопка: {call.data}")
+    bot.answer_callback_query(call.id, "Кнопка нажата!")
+
 @bot.message_handler(commands=['ping'])
 def test_ping(message):
     bot.send_message(message.chat.id, "Пинг ок!")
