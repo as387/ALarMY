@@ -146,7 +146,8 @@ def start_command(message):
         reply_markup=menu_keyboard
     )
 
-@bot.message_handler(func=lambda message: message.text == "➕ Добавить")
+@bot.message_handler(func=lambda message: message.text == "🆕 Добавить")
+
 def handle_add(message):
     add_reminder(message)  # Вызывает уже существующую функцию
     print("Добавление нажато")  # или logger.info(...)
@@ -166,7 +167,7 @@ def handle_confirm(message):
 @bot.message_handler(func=lambda message: message.text == "↩️ Назад в меню")
 def back_to_main_menu(message):
     bot.clear_step_handler_by_chat_id(message.chat.id)
-    bot.send_message(message.chat.id, "Главное меню:", reply_markup=ReplyKeyboardMarkup())
+    bot.send_message(message.chat.id, "Главное меню:", reply_markup=menu_keyboard)
 
 ADMIN_ID = 941791842  # замени на свой
 
