@@ -849,8 +849,6 @@ if __name__ == "__main__":
     load_reminders()
     restore_jobs()
 
-    application.add_handler(CallbackQueryHandler(confirm_reminder, pattern=r'^confirm_\d+$'))
-
     ping_thread = threading.Thread(target=self_ping)
     ping_thread.daemon = True
     ping_thread.start()
