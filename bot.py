@@ -731,11 +731,11 @@ def handle_confirmation(call):
             return
 
     
-if __name__ == "__main__":
-    load_reminders()
-    restore_jobs()
+import threading
+from server import app
 
-    ping_thread = threading.Thread(target=self_ping)
-    ping_thread.daemon = True
-    ping_thread.start()
-    app.run(host="0.0.0.0", port=10000)
+# Запускаем Flask в отдельном потоке
+threading.Thread(target=lambda: app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))).start()
+
+# А дальше обычный polling
+bot.infinity_polling()
