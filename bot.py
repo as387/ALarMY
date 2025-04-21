@@ -17,8 +17,7 @@ menu_keyboard.add(
     KeyboardButton("🔁 Повтор")
 )
 menu_keyboard.add(
-    KeyboardButton("🗑 Удалить"),
-    KeyboardButton("✅ Подтв.")
+    KeyboardButton("📋 Напоминания")
 )
 
 temp_repeating = {}
@@ -261,6 +260,40 @@ def process_reminder(message):
         )
         bot.clear_step_handler_by_chat_id(message.chat.id)
         bot.register_next_step_handler(message, process_reminder)
+        
+@bot.message_handler(func=lambda message: message.text == "📋 Напоминания")
+def show_reminders(message):
+    user_id = message.from_user.id
+    ensure_user_exists(user_id)
+
+    if not reminders[user_id]:
+        bot.send_message(message.chat.id, "У вас нет активных напоминаний.", reply_markup=menu_keyboard)
+        return
+
+    sorted_reminders = sorted(reminders[user_id], key=lambda item: item["time"])
+    text = "Ваши напоминания:\n"
+
+    for i, rem in enumerate(sorted_reminders, start=1):
+        msk_time = rem["time"].astimezone(moscow)
+        line = f"{i}. {msk_time.strftime('%d.%m %H:%M')} — {rem['text']}"
+
+        if rem.get("is_repeating"):
+            match = re.search(r"\(повт\. (.+?)\)", rem.get("text", ""))
+            if match:
+                interval_text = match.group(1)
+                line += f" 🔁 ({interval_text})"
+
+        if rem.get("needs_confirmation"):
+            interval = rem.get("repeat_interval", 30)
+            line += f", 🚨 ({interval})"
+
+        text += line + "\n"
+
+    keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
+    keyboard.add(types.KeyboardButton("🗑 Удалить"), types.KeyboardButton("✅ Подтв."))
+    keyboard.add(types.KeyboardButton("↩️ Назад в меню"))
+
+    bot.send_message(message.chat.id, text, reply_markup=keyboard)
 
 
 ADMIN_ID = 941791842  # замени на свой Telegram ID
@@ -284,9 +317,9 @@ def show_users(message):
 
     response = "👥 Пользователи:\n"
     for uid, data in users.items():
-        name = f"{data.get('first_name', '')} {data.get('last_name', '')}".strip()
+        name = data.get("first_name", "")
         uname = f"@{data['username']}" if data.get('username') else "(без username)"
-        joined = data.get('joined_at', 'время не указано')
+        joined = data.get("joined_at", "время не указано")
         response += f"\n🆔 {uid} — {name} {uname}\n🕒 Зашёл: {joined}\n"
 
     bot.send_message(message.chat.id, response)
