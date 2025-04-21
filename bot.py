@@ -26,7 +26,7 @@ def create_weekday_keyboard(user_id):
 
     keyboard.add(*buttons)
     if selected:
-        keyboard.add(types.InlineKeyboardButton("✅ Готово", callback_data="done_weekdays"))
+        keyboard.add(types.InlineKeyboardButton("✅ Готово", callback_data="weekdays_done"))
     else:
         keyboard.add(types.InlineKeyboardButton("🔒 Готово", callback_data="disabled"))
 
