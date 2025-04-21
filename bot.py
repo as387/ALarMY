@@ -633,7 +633,7 @@ async def repeat_reminder_check(reminder, context):
 
     await send_reminder_with_confirmation(reminder, context)
 
-async def send_reminder_with_confirmation(reminder: Reminder, context: ContextTypes.DEFAULT_TYPE):
+async def send_reminder_with_confirmation(reminder, context):
     keyboard = [
         [InlineKeyboardButton("☑️ Подтвердить", callback_data=f"confirm_{reminder.id}")]
     ]
