@@ -58,12 +58,13 @@ bot.set_my_commands([
 def start_command(message):
     user_id = message.from_user.id
     ensure_user_exists(user_id)
+    bot.clear_step_handler_by_chat_id(message.chat.id)  # 👈 вот эта строка
     bot.send_message(message.chat.id, "ЙОУ! Выберите действие:", reply_markup=main_menu_keyboard())
 
 @bot.message_handler(func=lambda message: message.text == "↩️ Назад в меню")
 def back_to_main_menu(message):
+    bot.clear_step_handler_by_chat_id(message.chat.id)
     bot.send_message(message.chat.id, "Главное меню:", reply_markup=main_menu_keyboard())
-
 
 @bot.message_handler(commands=['ping'])
 def test_ping(message):
@@ -72,6 +73,7 @@ def test_ping(message):
 @bot.message_handler(func=lambda message: message.text == "Добавить напоминание")
 def add_reminder(message):
     bot.send_message(message.chat.id, "Введите напоминание в формате ЧЧ.ММ *событие* или ДД.ММ ЧЧ.ММ *событие*.", 	reply_markup=back_to_menu_keyboard())
+    bot.clear_step_handler_by_chat_id(message.chat.id)
     bot.register_next_step_handler(message, process_reminder)
 
 def process_reminder(message):
@@ -121,11 +123,13 @@ def process_reminder(message):
 
     except Exception:
         bot.send_message(message.chat.id, "Неверный формат. Попробуйте снова.", reply_markup=back_to_menu_keyboard())
+        bot.clear_step_handler_by_chat_id(message.chat.id)
         bot.register_next_step_handler(message, process_reminder)
 
 @bot.message_handler(func=lambda message: message.text == "Повторяющееся напоминание")
 def add_repeating_reminder(message):
     bot.send_message(message.chat.id, "Введите время и событие в формате ЧЧ.ММ *событие*.", reply_markup=back_to_menu_keyboard())
+    bot.clear_step_handler_by_chat_id(message.chat.id)
     bot.register_next_step_handler(message, ask_repeat_interval)
 
 def ask_repeat_interval(message):
@@ -146,10 +150,12 @@ def ask_repeat_interval(message):
         keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
         keyboard.add(types.KeyboardButton("Каждый день"), types.KeyboardButton("Каждую неделю"))
         bot.send_message(message.chat.id, "Как часто повторять?", reply_markup=keyboard)
+        bot.clear_step_handler_by_chat_id(message.chat.id)
         bot.register_next_step_handler(message, process_repeating_interval)
 
     except:
         bot.send_message(message.chat.id, "Неверный формат. Попробуйте снова.")
+        bot.clear_step_handler_by_chat_id(message.chat.id)
         bot.register_next_step_handler(message, add_repeating_reminder)
 
 
@@ -171,9 +177,6 @@ def process_repeating_interval(message):
     ensure_user_exists(user_id)
     interval_input = message.text.strip().lower()
 
-    time_str = data["time_str"]
-    event = data["event"]
-
     interval = None
     if interval_input == "каждый день":
         interval = "день"
@@ -181,6 +184,7 @@ def process_repeating_interval(message):
         interval = "неделя"
     else:
         bot.send_message(message.chat.id, "Непонятный интервал. Попробуйте снова.")
+        bot.clear_step_handler_by_chat_id(message.chat.id)
         bot.register_next_step_handler(message, process_repeating_interval)
         return
 
@@ -233,6 +237,7 @@ def show_reminders(message):
     text += "\nВведите номера напоминаний для удаления (через пробел):"
 
     bot.send_message(message.chat.id, text, reply_markup=back_to_menu_keyboard())
+    bot.clear_step_handler_by_chat_id(message.chat.id)
     bot.register_next_step_handler(message, process_remove_input)
 
 def process_remove_input(message):
