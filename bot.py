@@ -39,9 +39,20 @@ def main_menu_keyboard():
     keyboard.add(types.KeyboardButton("Показать напоминания"))
     return keyboard
 
+def back_to_menu_keyboard():
+    keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
+    keyboard.add(types.KeyboardButton("↩️ Назад в меню"))
+    return keyboard
+
 def ensure_user_exists(user_id):
     if user_id not in reminders:
         reminders[user_id] = []
+
+
+bot.set_my_commands([
+    telebot.types.BotCommand("start", "Главное меню"),
+    telebot.types.BotCommand("ping", "Проверить, жив ли бот"),
+])
 
 @bot.message_handler(commands=['start'])
 def start_command(message):
@@ -49,13 +60,18 @@ def start_command(message):
     ensure_user_exists(user_id)
     bot.send_message(message.chat.id, "ЙОУ! Выберите действие:", reply_markup=main_menu_keyboard())
 
+@bot.message_handler(func=lambda message: message.text == "↩️ Назад в меню")
+def back_to_main_menu(message):
+    bot.send_message(message.chat.id, "Главное меню:", reply_markup=main_menu_keyboard())
+
+
 @bot.message_handler(commands=['ping'])
 def test_ping(message):
     bot.send_message(message.chat.id, "Пинг ок!")
 
 @bot.message_handler(func=lambda message: message.text == "Добавить напоминание")
 def add_reminder(message):
-    bot.send_message(message.chat.id, "Введите напоминание в формате ЧЧ.ММ *событие* или ДД.ММ ЧЧ.ММ *событие*.", reply_markup=types.ReplyKeyboardRemove())
+    bot.send_message(message.chat.id, "Введите напоминание в формате ЧЧ.ММ *событие* или ДД.ММ ЧЧ.ММ *событие*.", 	reply_markup=back_to_menu_keyboard())
     bot.register_next_step_handler(message, process_reminder)
 
 def process_reminder(message):
@@ -104,12 +120,12 @@ def process_reminder(message):
         bot.send_message(message.chat.id, f"Напоминание на {reminder_datetime_moscow.strftime('%d.%m %H:%M')} (MSK) — {event}", reply_markup=main_menu_keyboard())
 
     except Exception:
-        bot.send_message(message.chat.id, "Неверный формат. Попробуйте снова.", reply_markup=types.ReplyKeyboardRemove())
+        bot.send_message(message.chat.id, "Неверный формат. Попробуйте снова.", reply_markup=back_to_menu_keyboard())
         bot.register_next_step_handler(message, process_reminder)
 
 @bot.message_handler(func=lambda message: message.text == "Повторяющееся напоминание")
 def add_repeating_reminder(message):
-    bot.send_message(message.chat.id, "Введите время и событие в формате ЧЧ.ММ *событие*.", reply_markup=types.ReplyKeyboardRemove())
+    bot.send_message(message.chat.id, "Введите время и событие в формате ЧЧ.ММ *событие*.", reply_markup=back_to_menu_keyboard())
     bot.register_next_step_handler(message, ask_repeat_interval)
 
 def ask_repeat_interval(message):
@@ -216,7 +232,7 @@ def show_reminders(message):
         text += f"{i}. {msk_time.strftime('%d.%m %H:%M')} - {rem['text']}\n"
     text += "\nВведите номера напоминаний для удаления (через пробел):"
 
-    bot.send_message(message.chat.id, text, reply_markup=types.ReplyKeyboardRemove())
+    bot.send_message(message.chat.id, text, reply_markup=back_to_menu_keyboard())
     bot.register_next_step_handler(message, process_remove_input)
 
 def process_remove_input(message):
