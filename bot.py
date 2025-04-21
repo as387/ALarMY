@@ -44,6 +44,46 @@ def back_to_menu_keyboard():
     keyboard.add(types.KeyboardButton("↩️ Назад в меню"))
     return keyboard
 
+import json
+
+def load_reminders():
+    global reminders
+    try:
+        with open("reminders.json", "r", encoding="utf-8") as f:
+            data = json.load(f)
+            for user_id, user_reminders in data.items():
+                reminders[int(user_id)] = user_reminders
+    except FileNotFoundError:
+        print("Файл reminders.json не найден, начинаем с пустого списка.")
+
+def save_reminders():
+    with open("reminders.json", "w", encoding="utf-8") as f:
+        json.dump(reminders, f, ensure_ascii=False, indent=2, default=str)
+
+def restore_jobs():
+    for user_id, user_reminders in reminders.items():
+        for rem in user_reminders:
+            if rem["is_repeating"]:
+                scheduler.add_job(
+                    send_reminder,
+                    trigger='interval',
+                    days=1 if "день" in rem["text"] else 7,
+                    start_date=rem["time"],
+                    args=[int(user_id), rem["text"].split(" (повт.")[0], rem["time"].split("T")[1][:5], rem["job_id"]],
+                    id=rem["job_id"]
+                )
+            else:
+                rem_time = datetime.fromisoformat(rem["time"])
+                if rem_time > datetime.utcnow():
+                    scheduler.add_job(
+                        send_reminder,
+                        trigger='date',
+                        run_date=rem_time,
+                        args=[int(user_id), rem["text"], rem_time.strftime("%H:%M"), rem["job_id"]],
+                        id=rem["job_id"]
+                    )
+
+
 def ensure_user_exists(user_id):
     if user_id not in reminders:
         reminders[user_id] = []
@@ -113,6 +153,7 @@ def process_reminder(message):
             "job_id": job_id,
             "is_repeating": False
         })
+        save_reminders()
 
         scheduler.add_job(
             send_reminder,
@@ -223,6 +264,7 @@ def process_repeating_interval(message):
             "job_id": job_id,
             "is_repeating": True
         })
+        save_reminders()
 
         bot.send_message(message.chat.id,
                          f"Повторяющееся напоминание на {first_run.strftime('%d.%m %H:%M')} (MSK) — {event} каждую {interval}",
@@ -267,6 +309,7 @@ def process_remove_input(message):
                 if job.id == rem["job_id"]:
                     job.remove()
             reminders[user_id].remove(rem)
+            save_reminders()
 
         bot.send_message(message.chat.id, "Напоминания удалены.", reply_markup=main_menu_keyboard())
 
@@ -314,6 +357,9 @@ def self_ping():
         sleep(60)
 
 if __name__ == "__main__":
+    load_reminders()
+    restore_jobs()
+
     ping_thread = threading.Thread(target=self_ping)
     ping_thread.daemon = True
     ping_thread.start()
