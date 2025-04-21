@@ -11,6 +11,10 @@ from telebot.types import ReplyKeyboardMarkup, KeyboardButton
 
 from telebot.types import ReplyKeyboardMarkup, KeyboardButton
 
+import logging
+logging.basicConfig(level=logging.DEBUG)
+
+
 selected_weekdays = {}
 DAYS_RU = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"]
 
@@ -863,6 +867,12 @@ def handle_weekday_done(call):
         logger.error(f"Ошибка в handle_weekday_done: {e}")
         bot.send_message(chat_id, "Ошибка при создании напоминания. Попробуйте снова.", reply_markup=menu_keyboard)
     
+@bot.callback_query_handler(func=lambda call: True)
+def fallback_handler(call):
+    print(f"[FALLBACK] Необработанная кнопка: {call.data}")
+    bot.answer_callback_query(call.id, "🤖 Бот получил кнопку, но не понял её.")
+
+
 if __name__ == "__main__":
     load_reminders()
     restore_jobs()
