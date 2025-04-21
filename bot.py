@@ -157,11 +157,29 @@ def handle_repeat(message):
 
 @bot.message_handler(func=lambda message: message.text == "🗑 Удалить")
 def handle_delete(message):
-    show_reminders(message)
+    user_id = message.from_user.id
+    ensure_user_exists(user_id)
 
+    if not reminders[user_id]:
+        bot.send_message(message.chat.id, "У вас нет активных напоминаний.", reply_markup=menu_keyboard)
+        return
+
+    bot.send_message(message.chat.id, "Введите номера напоминаний для удаления (через пробел):", reply_markup=back_to_menu_keyboard())
+    bot.clear_step_handler_by_chat_id(message.chat.id)
+    bot.register_next_step_handler(message, process_remove_input)
+    
 @bot.message_handler(func=lambda message: message.text == "✅ Подтв.")
 def handle_confirm(message):
-    toggle_repeat_mode(message)
+    user_id = message.from_user.id
+    ensure_user_exists(user_id)
+
+    if not reminders[user_id]:
+        bot.send_message(message.chat.id, "У вас нет активных напоминаний.", reply_markup=menu_keyboard)
+        return
+
+    bot.send_message(message.chat.id, "Введите номера напоминаний, для которых включить/отключить подтверждение (через пробел):", reply_markup=back_to_menu_keyboard())
+    bot.clear_step_handler_by_chat_id(message.chat.id)
+    bot.register_next_step_handler(message, process_repeat_selection)
 
 @bot.message_handler(func=lambda message: message.text == "↩️ Назад в меню")
 def back_to_main_menu(message):
