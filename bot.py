@@ -373,7 +373,7 @@ def process_reminder(message):
             id=job_id
         )
 
-        bot.send_message(message.chat.id, f"Напоминание на {reminder_datetime_moscow.strftime('%d.%m %H:%M')} (MSK) — {event}", reply_markup=ReplyKeyboardMarkup())
+        bot.send_message(message.chat.id, f"Напоминание на {reminder_datetime_moscow.strftime('%d.%m %H:%M')} (MSK) — {event}", reply_markup=menu_keyboard)
 
     except Exception:
         bot.send_message(message.chat.id, "Неверный формат. Попробуйте снова.", reply_markup=back_to_menu_keyboard())
@@ -485,27 +485,6 @@ def process_repeating_interval(message):
         logger.error(f"Ошибка в повторяющемся напоминании: {e}")
         bot.send_message(message.chat.id, "Что-то пошло не так. Попробуйте снова.", reply_markup=ReplyKeyboardMarkup())
 
-@bot.message_handler(func=lambda message: message.text == "Показать напоминания")
-def show_reminders(message):
-    user_id = message.from_user.id
-    ensure_user_exists(user_id)
-    if not reminders[user_id]:
-        bot.send_message(message.chat.id, "У вас нет активных напоминаний.", reply_markup=ReplyKeyboardMarkup())
-        return
-
-    sorted_reminders = sorted(reminders[user_id], key=lambda item: item["time"])
-    text = "Ваши напоминания:\n"
-    for i, rem in enumerate(sorted_reminders, start=1):
-        msk_time = rem["time"].astimezone(moscow)
-        repeat_icon = "🔁" if rem.get("is_repeating") else ""
-        confirm_icon = "☑️" if rem.get("needs_confirmation") else ""
-        text += f"{i}. {msk_time.strftime('%d.%m %H:%M')} - {rem['text']} {repeat_icon}{confirm_icon}\n"
-    text += "\nВведите номера напоминаний для удаления (через пробел):"
-
-    bot.send_message(message.chat.id, text, reply_markup=back_to_menu_keyboard())
-    bot.clear_step_handler_by_chat_id(message.chat.id)
-    bot.register_next_step_handler(message, process_remove_input)
-
 def process_remove_input(message):
 
     if message.text == "↩️ Назад в меню":
@@ -611,23 +590,16 @@ def self_ping():
             print(f"[PING ERROR] {e}")
         sleep(60)
 
-@bot.message_handler(commands=['repeat'])
+@bot.message_handler(func=lambda message: message.text == "✅ Подтв.")
 def toggle_repeat_mode(message):
     user_id = message.from_user.id
     ensure_user_exists(user_id)
 
     if not reminders[user_id]:
-        bot.send_message(message.chat.id, "У вас нет активных напоминаний.", reply_markup=ReplyKeyboardMarkup())
+        bot.send_message(message.chat.id, "У вас нет активных напоминаний.", reply_markup=menu_keyboard)
         return
 
-    sorted_reminders = sorted(reminders[user_id], key=lambda item: item["time"])
-    text = "Введите номера напоминаний, для которых включить/отключить повтор через 30 мин:\n\n"
-    for i, rem in enumerate(sorted_reminders, 1):
-        status = "✅" if rem.get("needs_confirmation") else "❌"
-        text += f"{i}. {rem['text']} — {status}\n"
-
-    text += "\nПример: 1 3 5 — чтобы переключить поведение этих напоминаний."
-    bot.send_message(message.chat.id, text, reply_markup=back_to_menu_keyboard())
+    bot.send_message(message.chat.id, "Введите номера напоминаний, для которых включить/отключить подтверждение.", reply_markup=back_to_menu_keyboard())
     bot.clear_step_handler_by_chat_id(message.chat.id)
     bot.register_next_step_handler(message, process_repeat_selection)
 
