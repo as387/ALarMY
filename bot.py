@@ -289,10 +289,8 @@ def show_reminders(message):
         bot.send_message(message.chat.id, "У вас нет активных напоминаний.", reply_markup=menu_keyboard)
         return
 
-    sorted_reminders = sorted(reminders[user_id], key=lambda item: item["time"])
     text = "Ваши напоминания:\n"
 
-    sorted_reminders = sorted(reminders[user_id], key=lambda item: item["time"])
 normal = []
 repeating = []
 
