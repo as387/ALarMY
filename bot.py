@@ -644,7 +644,7 @@ async def send_reminder_with_confirmation(reminder, context):
         reply_markup=reply_markup
     )
 
-async def confirm_reminder(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def confirm_reminder(update, context):
     query = update.callback_query
     await query.answer()
 
