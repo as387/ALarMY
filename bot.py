@@ -643,14 +643,6 @@ def toggle_repeat_mode(message):
     bot.clear_step_handler_by_chat_id(message.chat.id)
     bot.register_next_step_handler(message, process_repeat_selection)
 
-for rem in sorted_reminders:
-    if rem.get("is_repeating"):
-        repeating.append(rem)
-    else:
-        normal.append(rem)
-
-text = ""
-
 if normal:
     text += "Ваши напоминания:\n"
     for i, rem in enumerate(normal, start=1):
