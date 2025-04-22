@@ -33,6 +33,7 @@ reminders = {}
 WEBHOOK_URL = 'https://din-js6l.onrender.com'  
 
 bot.remove_webhook()
+bot.set_webhook(url=WEBHOOK_URL)
 
 from pytz import timezone, utc
 
@@ -205,11 +206,11 @@ def show_users(message):
         bot.send_message(message.chat.id, "😶 Пользователей не найдено.")
         return
 
-    response = "👥 Пользователи:\n"
+    response = ""
     for uid, data in users.items():
-        name = data.get("first_name", "❓")
+        uname = f"@{data['username']}" if data.get('username') else data.get("first_name", "❓")
         joined = data.get("joined_at", "время не указано")
-        response += f"{uname if uname != '(без username)' else name}, [{joined}]\n"
+        response += f"{uname}, [{joined}]\n"
 
     bot.send_message(message.chat.id, response)
 
@@ -280,7 +281,6 @@ def process_reminder(message):
         bot.register_next_step_handler(message, process_reminder)
         
 @bot.message_handler(func=lambda message: message.text == "📋 Напоминания")
-@bot.message_handler(func=lambda message: message.text == "📋 Напоминания")
 def show_reminders(message):
     user_id = message.from_user.id
     ensure_user_exists(user_id)
@@ -290,50 +290,30 @@ def show_reminders(message):
         return
 
     sorted_reminders = sorted(reminders[user_id], key=lambda item: item["time"])
-    normal = []
-    repeating = []
+    text = "Ваши напоминания:\n"
 
-    for rem in sorted_reminders:
+    for i, rem in enumerate(sorted_reminders, start=1):
+        msk_time = rem["time"].astimezone(moscow)
+        line = f"{i}. {msk_time.strftime('%d.%m %H:%M')} — {rem['text']}"
+
         if rem.get("is_repeating"):
-            repeating.append(rem)
-        else:
-            normal.append(rem)
+            match = re.search(r"\(повт\. (.+?)\)", rem.get("text", ""))
+            if match:
+                interval_text = match.group(1)
+                line += f" 🔁 ({interval_text})"
 
-        text = ""
-        counter = 1  # общий номер
-        
-        if normal:
-            text += "Ваши напоминания:\n"
-            for rem in normal:
-                msk_time = rem["time"].astimezone(moscow)
-                line = f"{counter}. {msk_time.strftime('%d.%m %H:%M')} — {rem['text']}"
-                if rem.get("needs_confirmation"):
-                    interval = rem.get("repeat_interval", 30)
-                    line += f", 🚨 ({interval})"
-                text += line + "\n"
-                counter += 1
-        
-        if repeating:
-            text += "Ваши повторяющиеся напоминания:\n"
-            for rem in repeating:
-                msk_time = rem["time"].astimezone(moscow)
-                match = re.search(r"\(повт\. (.+?)\)", rem.get("text", ""))
-                interval_text = match.group(1) if match else ""
-                line = f"{counter}. {msk_time.strftime('%d.%m %H:%M')} — {rem['text']} 🔁"
-                if interval_text:
-                    line += f" ({interval_text})"
-                if rem.get("needs_confirmation"):
-                    interval = rem.get("repeat_interval", 30)
-                    line += f", 🚨 ({interval})"
-                text += line + "\n"
-                counter += 1
+        if rem.get("needs_confirmation"):
+            interval = rem.get("repeat_interval", 30)
+            line += f", 🚨 ({interval})"
 
+        text += line + "\n"
 
     keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
     keyboard.add(types.KeyboardButton("🗑 Удалить"), types.KeyboardButton("✅ Подтв."))
     keyboard.add(types.KeyboardButton("↩️ Назад в меню"))
 
     bot.send_message(message.chat.id, text, reply_markup=keyboard)
+
 
 ADMIN_ID = 941791842  # замени на свой Telegram ID
 
@@ -646,6 +626,41 @@ def toggle_repeat_mode(message):
     bot.clear_step_handler_by_chat_id(message.chat.id)
     bot.register_next_step_handler(message, process_repeat_selection)
 
+def process_repeat_selection(message):
+    if message.text == "↩️ Назад в меню":
+        return back_to_main_menu(message)
+
+    user_id = message.from_user.id
+    ensure_user_exists(user_id)
+
+    try:
+        parts = message.text.strip().split()
+        indices = list(map(int, [x for x in parts if x.isdigit()]))
+        custom_interval = int(parts[-1]) if len(parts) >= 2 and parts[-1].isdigit() else 30
+
+        sorted_reminders = sorted(reminders[user_id], key=lambda item: item["time"])
+
+        for i in indices:
+            if 0 < i <= len(sorted_reminders):
+                rem = sorted_reminders[i - 1]
+                # Переключаем: если уже был включён — отключаем
+                if rem.get("needs_confirmation"):
+                    rem["needs_confirmation"] = False
+                    rem.pop("repeat_interval", None)
+                else:
+                    rem["needs_confirmation"] = True
+                    rem["repeat_interval"] = custom_interval
+
+        save_reminders()
+        bot.send_message(
+            message.chat.id,
+            f"✅ Обновлено! Повтор через {custom_interval} мин. (если включено)",
+            reply_markup=menu_keyboard
+        )
+    except Exception as e:
+        bot.send_message(message.chat.id, "Что-то пошло не так. Проверь формат и попробуй снова.", reply_markup=ReplyKeyboardMarkup())
+        logger.error(f"[REPEAT_SELECTION ERROR] {e}")
+
 @bot.message_handler(commands=['done'])
 def confirm_done(message):
     parts = message.text.strip().split()
@@ -694,26 +709,12 @@ def handle_confirmation(call):
                 bot.answer_callback_query(call.id, "🔄 Напоминание останется активным.")
             return
 
-import threading
-import os
-import telebot
-from flask import Flask
-
-app = Flask(__name__)
-
-@app.route('/')
-def index():
-    return "Bot is running!"
-
-# Удаляем старый вебхук
-bot.remove_webhook()
-
-def run_flask():
-    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
-
+    
 if __name__ == "__main__":
-    # Запускаем Flask в отдельном потоке
-    threading.Thread(target=run_flask).start()
+    load_reminders()
+    restore_jobs()
 
-    # Запускаем polling
-    bot.infinity_polling()
+    ping_thread = threading.Thread(target=self_ping)
+    ping_thread.daemon = True
+    ping_thread.start()
+    app.run(host="0.0.0.0", port=10000)
