@@ -20,11 +20,91 @@ menu_keyboard.add(
     KeyboardButton("📋 Напоминания")
 )
 
+
 temp_repeating = {}
 
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 bot = telebot.TeleBot(BOT_TOKEN)
 app = Flask(__name__)
+
+# Переменная для хранения интервала (по умолчанию 30 минут)
+confirmation_interval = 30
+
+# Команда /help - отправка инструкции в PDF
+@bot.message_handler(commands=['help'])
+def send_help(message):
+    try:
+        # Загружаем PDF файл
+        with open("instruction.pdf", "rb") as pdf_file:
+            bot.send_document(message.chat.id, pdf_file)
+    except FileNotFoundError:
+        bot.send_message(message.chat.id, "Извините, файл с инструкцией не найден.")
+
+# Команда /set_confirmation_interval - изменение интервала для подтверждения
+@bot.message_handler(commands=['set_confirmation_interval'])
+def set_confirmation_interval(message):
+    bot.send_message(message.chat.id, "Введите новый интервал в минутах для подтверждения (например, 15, 30, 45):")
+    bot.register_next_step_handler(message, process_interval_input)
+
+def process_interval_input(message):
+    global confirmation_interval
+    try:
+        new_interval = int(message.text.strip())
+        if new_interval <= 0:
+            raise ValueError("Интервал должен быть положительным числом.")
+        confirmation_interval = new_interval
+        bot.send_message(message.chat.id, f"Интервал для подтверждения изменён на {confirmation_interval} минут(ы).")
+    except ValueError as e:
+        bot.send_message(message.chat.id, f"Ошибка: {e}. Пожалуйста, введите правильное число.")
+        bot.register_next_step_handler(message, process_interval_input)
+
+# Пример использования изменения интервала при добавлении подтверждения
+@bot.message_handler(func=lambda message: message.text == "✅ Подтв.")
+def toggle_repeat_mode(message):
+    user_id = message.from_user.id
+    ensure_user_exists(user_id)
+
+    if not reminders[user_id]:
+        bot.send_message(message.chat.id, "У вас нет активных напоминаний.", reply_markup=menu_keyboard)
+        return
+
+    bot.send_message(message.chat.id, "Введите номера напоминаний, для которых включить/отключить подтверждение.", reply_markup=back_to_menu_keyboard())
+    bot.clear_step_handler_by_chat_id(message.chat.id)
+    bot.register_next_step_handler(message, process_repeat_selection)
+
+def process_repeat_selection(message):
+    if message.text == "↩️ Назад в меню":
+        return back_to_main_menu(message)
+
+    user_id = message.from_user.id
+    ensure_user_exists(user_id)
+
+    try:
+        parts = message.text.strip().split()
+        indices = list(map(int, [x for x in parts if x.isdigit()]))
+        sorted_reminders = sorted(reminders[user_id], key=lambda item: item["time"])
+
+        for i in indices:
+            if 0 < i <= len(sorted_reminders):
+                rem = sorted_reminders[i - 1]
+                # Переключаем: если уже был включён — отключаем
+                if rem.get("needs_confirmation"):
+                    rem["needs_confirmation"] = False
+                    rem.pop("repeat_interval", None)  # Убираем повторение, если оно было
+                else:
+                    rem["needs_confirmation"] = True
+                    # Устанавливаем интервал из переменной confirmation_interval
+                    rem["repeat_interval"] = confirmation_interval
+
+        save_reminders()
+        bot.send_message(
+            message.chat.id,
+            f"✅ Обновлено! Повтор через {confirmation_interval} мин. (если включено)",
+            reply_markup=menu_keyboard
+        )
+    except Exception as e:
+        bot.send_message(message.chat.id, "Что-то пошло не так. Проверь формат и попробуй снова.", reply_markup=ReplyKeyboardMarkup())
+        logger.error(f"[REPEAT_SELECTION ERROR] {e}")
 
 scheduler = BackgroundScheduler()
 scheduler.start()
