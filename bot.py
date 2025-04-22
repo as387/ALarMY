@@ -700,10 +700,5 @@ from server import app
 
 bot.remove_webhook()  # Удаляем старые подключения
 
-# Запускаем Flask в отдельном потоке
-threading.Thread(
-    target=lambda: app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
-).start()
-
 # Запуск polling
 bot.infinity_polling()
