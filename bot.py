@@ -124,6 +124,14 @@ logger = logging.getLogger(__name__)
 
 moscow = timezone('Europe/Moscow')
 
+# Обработчик команды /list_reminders
+@bot.message_handler(commands=['list_reminders'])
+def list_reminders(message):
+    # Логика для отображения напоминаний
+    reminders = get_all_reminders()  # Замените на вашу функцию получения напоминаний
+    reminder_text = "\n".join([f"{i+1}. {reminder}" for i, reminder in enumerate(reminders)])
+    bot.send_message(message.chat.id, reminder_text)
+
 def back_to_menu_keyboard():
     keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
     keyboard.add(types.KeyboardButton("↩️ Назад в меню"))
