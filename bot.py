@@ -643,31 +643,6 @@ def toggle_repeat_mode(message):
     bot.clear_step_handler_by_chat_id(message.chat.id)
     bot.register_next_step_handler(message, process_repeat_selection)
 
-if normal:
-    text += "Ваши напоминания:\n"
-    for i, rem in enumerate(normal, start=1):
-        msk_time = rem["time"].astimezone(moscow)
-        line = f"{i}. {msk_time.strftime('%d.%m %H:%M')} — {rem['text']}"
-        if rem.get("needs_confirmation"):
-            interval = rem.get("repeat_interval", 30)
-            line += f", 🚨 ({interval})"
-        text += line + "\n"
-
-if repeating:
-    text += "Ваши повторяющиеся напоминания:\n"
-    for i, rem in enumerate(repeating, start=1):
-        msk_time = rem["time"].astimezone(moscow)
-        match = re.search(r"\(повт\. (.+?)\)", rem.get("text", ""))
-        interval_text = match.group(1) if match else ""
-        line = f"{i}. {msk_time.strftime('%d.%m %H:%M')} — {rem['text']} 🔁"
-        if interval_text:
-            line += f" ({interval_text})"
-        if rem.get("needs_confirmation"):
-            interval = rem.get("repeat_interval", 30)
-            line += f", 🚨 ({interval})"
-        text += line + "\n"
-
-
 @bot.message_handler(commands=['done'])
 def confirm_done(message):
     parts = message.text.strip().split()
