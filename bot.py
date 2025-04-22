@@ -33,7 +33,6 @@ reminders = {}
 WEBHOOK_URL = 'https://din-js6l.onrender.com'  
 
 bot.remove_webhook()
-bot.set_webhook(url=WEBHOOK_URL)
 
 from pytz import timezone, utc
 
@@ -697,6 +696,8 @@ from server import app
 
 # Запускаем Flask в отдельном потоке
 threading.Thread(target=lambda: app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))).start()
+
+bot.remove_webhook()
 
 # А дальше обычный polling
 bot.infinity_polling()
