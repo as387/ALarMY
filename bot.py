@@ -698,8 +698,7 @@ def handle_confirmation(call):
 import threading
 from server import app
 
-# Удаляем старый вебхук
-bot.remove_webhook()
+bot.remove_webhook()  # Удаляем старые подключения
 
 # Запускаем Flask в отдельном потоке
 threading.Thread(
