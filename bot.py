@@ -178,13 +178,22 @@ from telebot.types import BotCommand, BotCommandScopeChatMember
 
 ADMIN_ID = 941791842  # замени на свой Telegram ID
 
-# Устанавливаем команды для всех пользователей
-bot.set_my_commands([
-    BotCommand("start", "Главное меню"),
-    BotCommand("ping", "Проверка"),
-    BotCommand("devmode", "Режим разработчика"),  # ← теперь доступна в меню всем
-])
-
+@bot.message_handler(commands=['start', 'help'])
+def send_help(message):
+    # Устанавливаем команды, которые будут отображаться в меню бота
+    bot.set_my_commands([
+        BotCommand("help", "Отправить инструкцию"),
+        BotCommand("set_confirmation_interval", "Установить интервал для подтверждения"),
+        BotCommand("list_reminders", "Показать список напоминаний"),
+        BotCommand("devmode", "Режим разработчика"),
+        # Закомментированные команды не будут отображаться:
+        # BotCommand("add_reminder", "Добавить одноразовое напоминание"),
+        # BotCommand("set_repeating_reminder", "Добавить повторяющееся напоминание"),
+        # BotCommand("manage_reminder", "Управлять напоминаниями"),
+        # BotCommand("delete_reminder", "Удалить напоминание"),
+        # BotCommand("ping", "Проверка работоспособности бота")
+    ])
+    bot.send_message(message.chat.id, "Вот список доступных команд:")
 
 import json
 from datetime import datetime
