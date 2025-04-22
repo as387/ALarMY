@@ -698,11 +698,13 @@ def handle_confirmation(call):
 import threading
 from server import app
 
-bot.remove_webhook(drop_pending_updates=True)  # Отключаем любые старые подключения
+# Удаляем старый вебхук
+bot.remove_webhook()
 
-# Запускаем Flask
+# Запускаем Flask в отдельном потоке
 threading.Thread(
     target=lambda: app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
 ).start()
 
+# Запуск polling
 bot.infinity_polling()
