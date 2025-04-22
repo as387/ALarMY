@@ -299,31 +299,35 @@ def show_reminders(message):
         else:
             normal.append(rem)
 
-    text = ""
+        text = ""
+        counter = 1  # общий номер
+        
+        if normal:
+            text += "Ваши напоминания:\n"
+            for rem in normal:
+                msk_time = rem["time"].astimezone(moscow)
+                line = f"{counter}. {msk_time.strftime('%d.%m %H:%M')} — {rem['text']}"
+                if rem.get("needs_confirmation"):
+                    interval = rem.get("repeat_interval", 30)
+                    line += f", 🚨 ({interval})"
+                text += line + "\n"
+                counter += 1
+        
+        if repeating:
+            text += "Ваши повторяющиеся напоминания:\n"
+            for rem in repeating:
+                msk_time = rem["time"].astimezone(moscow)
+                match = re.search(r"\(повт\. (.+?)\)", rem.get("text", ""))
+                interval_text = match.group(1) if match else ""
+                line = f"{counter}. {msk_time.strftime('%d.%m %H:%M')} — {rem['text']} 🔁"
+                if interval_text:
+                    line += f" ({interval_text})"
+                if rem.get("needs_confirmation"):
+                    interval = rem.get("repeat_interval", 30)
+                    line += f", 🚨 ({interval})"
+                text += line + "\n"
+                counter += 1
 
-    if normal:
-        text += "Ваши напоминания:\n"
-        for i, rem in enumerate(normal, start=1):
-            msk_time = rem["time"].astimezone(moscow)
-            line = f"{i}. {msk_time.strftime('%d.%m %H:%M')} — {rem['text']}"
-            if rem.get("needs_confirmation"):
-                interval = rem.get("repeat_interval", 30)
-                line += f", 🚨 ({interval})"
-            text += line + "\n"
-
-    if repeating:
-        text += "Ваши повторяющиеся напоминания:\n"
-        for i, rem in enumerate(repeating, start=1):
-            msk_time = rem["time"].astimezone(moscow)
-            match = re.search(r"\(повт\. (.+?)\)", rem.get("text", ""))
-            interval_text = match.group(1) if match else ""
-            line = f"{i}. {msk_time.strftime('%d.%m %H:%M')} — {rem['text']} 🔁"
-            if interval_text:
-                line += f" ({interval_text})"
-            if rem.get("needs_confirmation"):
-                interval = rem.get("repeat_interval", 30)
-                line += f", 🚨 ({interval})"
-            text += line + "\n"
 
     keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
     keyboard.add(types.KeyboardButton("🗑 Удалить"), types.KeyboardButton("✅ Подтв."))
