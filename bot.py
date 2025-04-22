@@ -694,11 +694,28 @@ def handle_confirmation(call):
                 bot.answer_callback_query(call.id, "🔄 Напоминание останется активным.")
             return
 
-    
 import threading
-from server import app
+import os
+import telebot
+from flask import Flask
 
-bot.remove_webhook()  # Удаляем старые подключения
+bot = telebot.TeleBot("YOUR_BOT_TOKEN")  # Укажи свой токен
 
-# Запуск polling
-bot.infinity_polling()
+app = Flask(__name__)
+
+@app.route('/')
+def index():
+    return "Bot is running!"
+
+# Удаляем старый вебхук
+bot.remove_webhook()
+
+def run_flask():
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
+
+if __name__ == "__main__":
+    # Запускаем Flask в отдельном потоке
+    threading.Thread(target=run_flask).start()
+
+    # Запускаем polling
+    bot.infinity_polling()
