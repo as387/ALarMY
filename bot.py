@@ -281,6 +281,7 @@ def process_reminder(message):
         bot.register_next_step_handler(message, process_reminder)
         
 @bot.message_handler(func=lambda message: message.text == "📋 Напоминания")
+@bot.message_handler(func=lambda message: message.text == "📋 Напоминания")
 def show_reminders(message):
     user_id = message.from_user.id
     ensure_user_exists(user_id)
@@ -289,17 +290,15 @@ def show_reminders(message):
         bot.send_message(message.chat.id, "У вас нет активных напоминаний.", reply_markup=menu_keyboard)
         return
 
-    text = "Ваши напоминания:\n"
+    sorted_reminders = sorted(reminders[user_id], key=lambda item: item["time"])
 
-normal = []
-repeating = []
-
-sorted_reminders = sorted(reminders[user_id], key=lambda item: item["time"])
-for rem in sorted_reminders:
-    if rem.get("is_repeating"):
-        repeating.append(rem)
-    else:
-        normal.append(rem)
+    normal = []
+    repeating = []
+    for rem in sorted_reminders:
+        if rem.get("is_repeating"):
+            repeating.append(rem)
+        else:
+            normal.append(rem)
 
 text = ""
 
