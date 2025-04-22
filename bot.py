@@ -699,8 +699,6 @@ import os
 import telebot
 from flask import Flask
 
-bot = telebot.TeleBot("YOUR_BOT_TOKEN")  # Укажи свой токен
-
 app = Flask(__name__)
 
 @app.route('/')
