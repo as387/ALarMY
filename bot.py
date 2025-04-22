@@ -636,8 +636,6 @@ def process_repeat_selection(message):
     try:
         parts = message.text.strip().split()
         indices = list(map(int, [x for x in parts if x.isdigit()]))
-        custom_interval = int(parts[-1]) if len(parts) >= 2 and parts[-1].isdigit() else 30
-
         sorted_reminders = sorted(reminders[user_id], key=lambda item: item["time"])
 
         for i in indices:
@@ -646,15 +644,14 @@ def process_repeat_selection(message):
                 # Переключаем: если уже был включён — отключаем
                 if rem.get("needs_confirmation"):
                     rem["needs_confirmation"] = False
-                    rem.pop("repeat_interval", None)
+                    rem.pop("repeat_interval", None)  # Убираем повторение, если оно было
                 else:
-                    rem["needs_confirmation"] = True
-                    rem["repeat_interval"] = custom_interval
+                    rem["needs_confirmation"] = True  # Устанавливаем необходимость подтверждения
 
         save_reminders()
         bot.send_message(
             message.chat.id,
-            f"✅ Обновлено! Повтор через {custom_interval} мин. (если включено)",
+            "✅ Обновлено! Повтор через 30 мин. (если включено)",
             reply_markup=menu_keyboard
         )
     except Exception as e:
