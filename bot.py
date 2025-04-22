@@ -34,9 +34,9 @@ confirmation_interval = 30
 @bot.message_handler(commands=['help'])
 def send_help(message):
     try:
-        # Загружаем PDF файл
-        with open("instruction.pdf", "rb") as pdf_file:
-            bot.send_document(message.chat.id, pdf_file)
+        # Убедитесь, что путь к файлу правильный
+        with open("instruction_extended.txt", "rb") as txt_file:
+            bot.send_document(message.chat.id, txt_file)
     except FileNotFoundError:
         bot.send_message(message.chat.id, "Извините, файл с инструкцией не найден.")
 
