@@ -281,7 +281,6 @@ def process_reminder(message):
         bot.register_next_step_handler(message, process_reminder)
         
 @bot.message_handler(func=lambda message: message.text == "📋 Напоминания")
-@bot.message_handler(func=lambda message: message.text == "📋 Напоминания")
 def show_reminders(message):
     user_id = message.from_user.id
     ensure_user_exists(user_id)
