@@ -281,6 +281,7 @@ def process_reminder(message):
         bot.register_next_step_handler(message, process_reminder)
         
 @bot.message_handler(func=lambda message: message.text == "📋 Напоминания")
+@bot.message_handler(func=lambda message: message.text == "📋 Напоминания")
 def show_reminders(message):
     user_id = message.from_user.id
     ensure_user_exists(user_id)
@@ -290,47 +291,46 @@ def show_reminders(message):
         return
 
     sorted_reminders = sorted(reminders[user_id], key=lambda item: item["time"])
-
     normal = []
     repeating = []
+
     for rem in sorted_reminders:
         if rem.get("is_repeating"):
             repeating.append(rem)
         else:
             normal.append(rem)
 
-text = ""
+    text = ""
 
-if normal:
-    text += "Ваши напоминания:\n"
-    for i, rem in enumerate(normal, start=1):
-        msk_time = rem["time"].astimezone(moscow)
-        line = f"{i}. {msk_time.strftime('%d.%m %H:%M')} — {rem['text']}"
-        if rem.get("needs_confirmation"):
-            interval = rem.get("repeat_interval", 30)
-            line += f", 🚨 ({interval})"
-        text += line + "\n"
+    if normal:
+        text += "Ваши напоминания:\n"
+        for i, rem in enumerate(normal, start=1):
+            msk_time = rem["time"].astimezone(moscow)
+            line = f"{i}. {msk_time.strftime('%d.%m %H:%M')} — {rem['text']}"
+            if rem.get("needs_confirmation"):
+                interval = rem.get("repeat_interval", 30)
+                line += f", 🚨 ({interval})"
+            text += line + "\n"
 
-if repeating:
-    text += "Ваши повторяющиеся напоминания:\n"
-    for i, rem in enumerate(repeating, start=1):
-        msk_time = rem["time"].astimezone(moscow)
-        match = re.search(r"\(повт\. (.+?)\)", rem.get("text", ""))
-        interval_text = match.group(1) if match else ""
-        line = f"{i}. {msk_time.strftime('%d.%m %H:%M')} — {rem['text']} 🔁"
-        if interval_text:
-            line += f" ({interval_text})"
-        if rem.get("needs_confirmation"):
-            interval = rem.get("repeat_interval", 30)
-            line += f", 🚨 ({interval})"
-        text += line + "\n"
+    if repeating:
+        text += "Ваши повторяющиеся напоминания:\n"
+        for i, rem in enumerate(repeating, start=1):
+            msk_time = rem["time"].astimezone(moscow)
+            match = re.search(r"\(повт\. (.+?)\)", rem.get("text", ""))
+            interval_text = match.group(1) if match else ""
+            line = f"{i}. {msk_time.strftime('%d.%m %H:%M')} — {rem['text']} 🔁"
+            if interval_text:
+                line += f" ({interval_text})"
+            if rem.get("needs_confirmation"):
+                interval = rem.get("repeat_interval", 30)
+                line += f", 🚨 ({interval})"
+            text += line + "\n"
 
     keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
     keyboard.add(types.KeyboardButton("🗑 Удалить"), types.KeyboardButton("✅ Подтв."))
     keyboard.add(types.KeyboardButton("↩️ Назад в меню"))
 
     bot.send_message(message.chat.id, text, reply_markup=keyboard)
-
 
 ADMIN_ID = 941791842  # замени на свой Telegram ID
 
@@ -642,10 +642,6 @@ def toggle_repeat_mode(message):
     bot.send_message(message.chat.id, "Введите номера напоминаний, для которых включить/отключить подтверждение.", reply_markup=back_to_menu_keyboard())
     bot.clear_step_handler_by_chat_id(message.chat.id)
     bot.register_next_step_handler(message, process_repeat_selection)
-
-sorted_reminders = sorted(reminders[user_id], key=lambda item: item["time"])
-normal = []
-repeating = []
 
 for rem in sorted_reminders:
     if rem.get("is_repeating"):
