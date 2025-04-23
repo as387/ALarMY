@@ -278,7 +278,7 @@ def handle_done_command(message):
     job_id = message.text.replace("/done_", "").strip()
 
     for rem in reminders.get(user_id, []):
-        if rem["job_id"] == job_id:
+        if str(rem["job_id"]) == job_id:
             try:
                 scheduler.remove_job(job_id)
             except:
@@ -298,7 +298,7 @@ def handle_skip_command(message):
     job_id = message.text.replace("/skip_", "").strip()
 
     for rem in reminders.get(user_id, []):
-        if rem["job_id"] == job_id:
+        if str(rem["job_id"]) == job_id:
             interval = rem.get("repeat_interval", confirmation_interval)
             global job_counter
             new_job_id = str(job_counter)
@@ -772,7 +772,7 @@ def send_reminder(user_id, event, time, job_id):
 
     # Обработка повтора
     for rem in reminders.get(user_id, []):
-        if rem["job_id"] == job_id:
+        if str(rem["job_id"]) == job_id:
             if rem.get("is_repeating"):
                 return
             if rem.get("needs_confirmation"):
@@ -878,7 +878,7 @@ def confirm_done(message):
     ensure_user_exists(user_id)
 
     for rem in reminders[user_id]:
-        if rem["job_id"] == job_id:
+        if str(rem["job_id"]) == job_id:
             rem["needs_confirmation"] = False
             rem.pop("repeat_interval", None)
             try:
@@ -919,7 +919,7 @@ def handle_confirm(message):
 
     # Ищем и удаляем напоминание
     for rem in reminders[user_id]:
-        if rem["job_id"] == job_id:
+        if str(rem["job_id"]) == job_id:
             try:
                 scheduler.remove_job(job_id)
             except:
@@ -942,7 +942,7 @@ def handle_skip(message):
         return
 
     for rem in reminders[user_id]:
-        if rem["job_id"] == job_id:
+        if str(rem["job_id"]) == job_id:
             interval = rem.get("repeat_interval", confirmation_interval)
             global job_counter
             new_job_id = str(job_counter)
