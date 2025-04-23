@@ -218,8 +218,7 @@ def send_help(message):
     bot.set_my_commands([
         BotCommand("help", "Отправить инструкцию"),
         BotCommand("set_confirmation_interval", "Установить интервал для подтверждения"),
-        BotCommand("list_reminders", "Показать список напоминаний"),
-        BotCommand("devmode", "Режим разработчика"),
+                BotCommand("devmode", "Режим разработчика"),
         # Закомментированные команды не будут отображаться:
         # BotCommand("add_reminder", "Добавить одноразовое напоминание"),
         # BotCommand("set_repeating_reminder", "Добавить повторяющееся напоминание"),
@@ -673,8 +672,8 @@ def send_reminder(user_id, event, time, job_id):
             if rem["job_id"] == job_id and rem.get("needs_confirmation"):
                 keyboard = InlineKeyboardMarkup()
                 keyboard.row(
-                    KeyboardButton("✅"),
-                    KeyboardButton("❌")
+                    InlineKeyboardButton("✅ Подтвердить", callback_data=f"confirm:{job_id}"),
+                    InlineKeyboardButton("🚫 Пропустить", callback_data=f"skip:{job_id}")
                 )
                 text_suffix = "\n\nНажмите, если выполнили:"
                 break
