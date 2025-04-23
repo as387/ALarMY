@@ -1,4 +1,23 @@
 # === ОГЛАВЛЕНИЕ ===
+# - Команды /
+# команда - /start
+# команда - /help
+# команда - /set_confirmation_interval
+# команда - /done
+# команда - /devmode
+# команда - /ping
+# команда - /dump
+# Кнопки
+# кнопка - 🆕 Добавить
+# кнопка - 🔁 Повтор
+# кнопка - 📋 Напоминания
+# кнопка - 🗑 Удалить
+# кнопка - ✅ Подтв.
+# кнопка - ↩️ Назад в меню
+# кнопка - ✅
+# кнопка - ❌
+
+# === ОГЛАВЛЕНИЕ ===
 # 1. Импорты и настройки
 # 2. Клавиатура и переменные
 # 3. Команды (/start, /help, /ping, /devmode, /done и т.д.)
@@ -134,8 +153,6 @@ logger = logging.getLogger(__name__)
 moscow = timezone('Europe/Moscow')
 
 # Обработчик команды /list_reminders
-@bot.message_handler(commands=['list_reminders'])
-def list_reminders(message):
     # Логика для отображения напоминаний
     reminders = get_all_reminders()  # Замените на вашу функцию получения напоминаний
     reminder_text = "\n".join([f"{i+1}. {reminder}" for i, reminder in enumerate(reminders)])
@@ -656,8 +673,8 @@ def send_reminder(user_id, event, time, job_id):
             if rem["job_id"] == job_id and rem.get("needs_confirmation"):
                 keyboard = InlineKeyboardMarkup()
                 keyboard.row(
-                    InlineKeyboardButton("✅ Подтвердить", callback_data=f"confirm:{job_id}"),
-                    InlineKeyboardButton("🚫 Пропустить", callback_data=f"skip:{job_id}")
+                    KeyboardButton("✅"),
+                    KeyboardButton("❌")
                 )
                 text_suffix = "\n\nНажмите, если выполнили:"
                 break
@@ -757,7 +774,7 @@ def process_repeat_selection(message):
         save_reminders()
         bot.send_message(
             message.chat.id,
-            "✅ Обновлено! Повтор через 30 мин. (если включено)",
+            "✅ Обновлено! Повтор через {} мин. (если включено)".format(confirmation_interval),
             reply_markup=menu_keyboard
         )
     except Exception as e:
