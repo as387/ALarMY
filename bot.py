@@ -770,16 +770,17 @@ def send_reminder(user_id, event, time, job_id):
                 
                 text_suffix = (
                     f"\n\nНажмите, если выполнили:\n"
-                    f"/done_{job_id}\n"
+                    f"/done_{rem['id']}\n"
                     f"или пропустите:\n"
-                    f"/skip_{job_id}"
+                    f"/skip_{rem['id']}"
                 )
+
                 break
 
         msg = bot.send_message(
             user_id,
-            f"🔔 Напоминание: {event} (в {reminder_time_msk} по МСК){text_suffix}\n\n[#ID:{job_id}]",
-            reply_markup=menu_keyboard  # или None
+            f"🔔 Напоминание: {event} (в {reminder_time_msk} по МСК){text_suffix}\n\n[#ID:{rem['id']}]",
+            reply_markup=menu_keyboard
         )
 
         logger.info(f"[REMINDER] Sent to user {user_id}")
