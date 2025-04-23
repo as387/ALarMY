@@ -28,10 +28,8 @@ menu_keyboard = ReplyKeyboardMarkup(resize_keyboard=True)
 menu_keyboard.add(
     KeyboardButton("🆕 Добавить"),
     KeyboardButton("🔁 Повтор")
-)
 menu_keyboard.add(
     KeyboardButton("📋 Напоминания")
-)
 
 
 temp_repeating = {}
@@ -111,7 +109,6 @@ def process_repeat_selection(message):
             message.chat.id,
             f"✅ Обновлено! Повтор через {confirmation_interval} мин. (если включено)",
             reply_markup=menu_keyboard
-        )
     except Exception as e:
         bot.send_message(message.chat.id, "Что-то пошло не так. Проверь формат и попробуй снова.", reply_markup=ReplyKeyboardMarkup())
         logger.error(f"[REPEAT_SELECTION ERROR] {e}")
@@ -129,7 +126,6 @@ from pytz import timezone, utc
 
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO
-)
 logger = logging.getLogger(__name__)
 
 moscow = timezone('Europe/Moscow')
@@ -173,7 +169,6 @@ def restore_jobs():
                     start_date=rem["time"],
                     args=[int(user_id), rem["text"].split(" (повт.")[0], rem["time"].split("T")[1][:5], rem["job_id"]],
                     id=rem["job_id"]
-                )
             else:
                 rem_time = datetime.fromisoformat(rem["time"])
                 if rem_time > datetime.utcnow():
@@ -183,7 +178,6 @@ def restore_jobs():
                         run_date=rem_time,
                         args=[int(user_id), rem["text"], rem_time.strftime("%H:%M"), rem["job_id"]],
                         id=rem["job_id"]
-                    )
 
 
 # === 5. Блок служебных функций ===
@@ -261,7 +255,6 @@ def start_command(message):
         message.chat.id,
         "Главное меню:\nВыберите действие:",
         reply_markup=menu_keyboard
-    )
 
 @bot.message_handler(func=lambda message: message.text == "🆕 Добавить")
 
@@ -393,21 +386,18 @@ def process_reminder(message):
             run_date=reminder_datetime,
             args=[user_id, event, reminder_datetime.strftime("%H:%M"), job_id],
             id=job_id
-        )
 
         # 🔥 Вот здесь ВОЗВРАТ К ГЛАВНОМУ МЕНЮ
         bot.send_message(
             message.chat.id,
             f"✅ Напоминание на {reminder_datetime_moscow.strftime('%d.%m %H:%M')} (MSK) — {event}",
             reply_markup=menu_keyboard
-        )
 
     except Exception:
         bot.send_message(
             message.chat.id,
             "Неверный формат. Попробуйте снова.",
             reply_markup=back_to_menu_keyboard()
-        )
         bot.clear_step_handler_by_chat_id(message.chat.id)
         bot.register_next_step_handler(message, process_reminder)
         
@@ -516,7 +506,6 @@ def process_reminder(message):
             run_date=reminder_datetime,
             args=[user_id, event, reminder_datetime.strftime("%H:%M"), job_id],
             id=job_id
-        )
 
         bot.send_message(message.chat.id, f"Напоминание на {reminder_datetime_moscow.strftime('%d.%m %H:%M')} (MSK) — {event}", reply_markup=menu_keyboard)
 
@@ -627,7 +616,6 @@ def process_repeating_interval(message):
             message.chat.id,
             f"✅ Повторяющееся напоминание на {first_run.strftime('%d.%m %H:%M')} (MSK) — {event} {form}",
             reply_markup=menu_keyboard
-        )
 
     except Exception as e:
         logger.error(f"Ошибка в повторяющемся напоминании: {e}")
@@ -680,8 +668,6 @@ def send_reminder(user_id, event, time, job_id):
             user_id,
             f"🔔 Напоминание: {event} (в {reminder_time_msk} по МСК){text_suffix}",
             reply_markup=reply_kb
-        )
-        )
 
         logger.info(f"[REMINDER] Sent to user {user_id}")
     except Exception as e:
@@ -700,7 +686,6 @@ def send_reminder(user_id, event, time, job_id):
                     run_date=datetime.utcnow() + timedelta(minutes=interval),
                     args=[user_id, event, time, new_job_id],
                     id=new_job_id
-                )
                 rem["job_id"] = new_job_id
                 save_reminders()
             else:
@@ -771,9 +756,7 @@ def process_repeat_selection(message):
             message.chat.id,
             f"✅ Обновлено! Повтор через {confirmation_interval} мин. (если включено)",
             reply_markup=menu_keyboard
-        )
             reply_markup=menu_keyboard
-        )
     except Exception as e:
         bot.send_message(message.chat.id, "Что-то пошло не так. Проверь формат и попробуй снова.", reply_markup=ReplyKeyboardMarkup())
         logger.error(f"[REPEAT_SELECTION ERROR] {e}")
