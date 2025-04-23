@@ -676,8 +676,7 @@ def send_reminder(user_id, event, time, job_id):
         # Добавляем кнопки только если нужно подтверждение
         for rem in reminders.get(user_id, []):
             if rem["job_id"] == job_id and rem.get("needs_confirmation"):
-                keyboard = ReplyKeyboardMarkup(resize_keyboard=True).row(KeyboardButton("✅"), KeyboardButton("❌")))
-                )
+                keyboard = ReplyKeyboardMarkup(resize_keyboard=True).row(KeyboardButton("✅"), KeyboardButton("❌"))
                 text_suffix = "\n\nНажмите, если выполнили:"
                 break
         
