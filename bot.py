@@ -687,7 +687,7 @@ def send_reminder(user_id, event, time, job_id):
 
         bot.send_message(
             user_id,
-            f"🔔 Напоминание: {event} (в {reminder_time_msk} по МСК){text_suffix}",
+            f"🔔 Напоминание: {event} (в {reminder_time_msk} по МСК){text_suffix}\n\n[#ID:{job_id}]",
             reply_markup=keyboard or ReplyKeyboardMarkup()
         )
 
@@ -826,17 +826,21 @@ def show_confirmation_interval(message):
 def handle_confirm(message):
     user_id = message.from_user.id
     ensure_user_exists(user_id)
-    pending = confirmation_pending.get(user_id)
-    if not pending:
-        bot.send_message(message.chat.id, "Нет активного напоминания.", reply_markup=menu_keyboard)
-        return
-    
-    job_id = pending["job_id"]
 
-    if not job_id:
-        bot.send_message(message.chat.id, "Нет активного напоминания.", reply_markup=menu_keyboard)
+    # Проверяем, есть ли сообщение, на которое нажата кнопка
+    if not message.reply_to_message or "#ID:" not in message.reply_to_message.text:
+        bot.send_message(message.chat.id, "Невозможно подтвердить: не найдено напоминание.", reply_markup=menu_keyboard)
         return
 
+    # Извлекаем job_id из текста сообщения
+    match = re.search(r"\[#ID:(.+?)\]", message.reply_to_message.text)
+    if not match:
+        bot.send_message(message.chat.id, "Ошибка при распознавании напоминания.", reply_markup=menu_keyboard)
+        return
+
+    job_id = match.group(1)
+
+    # Ищем и удаляем напоминание
     for rem in reminders[user_id]:
         if rem["job_id"] == job_id:
             try:
@@ -845,10 +849,10 @@ def handle_confirm(message):
                 pass
             reminders[user_id].remove(rem)
             save_reminders()
-            bot.send_message(message.chat.id, f"✅ Напоминание «{rem['text']}» подтверждено и удалено.")
-            break
+            bot.send_message(message.chat.id, f"✅ Напоминание «{rem['text']}» подтверждено и удалено.", reply_markup=menu_keyboard)
+            return
 
-    confirmation_pending.pop(user_id, None)
+    bot.send_message(message.chat.id, "Напоминание не найдено или уже подтверждено.", reply_markup=menu_keyboard)
 
 @bot.message_handler(func=lambda message: message.text == "🚫 Пропустить")
 def handle_skip(message):
