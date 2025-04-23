@@ -71,8 +71,7 @@ def start_command(message):
         BotCommand("devmode", "Режим разработчика"),
         BotCommand("restart", "Очистить все напоминания")
     ])
-    bot.send_message(message.chat.id, "Главное меню:
-Выберите действие:", reply_markup=menu_keyboard)
+    bot.send_message(message.chat.id, "Главное меню: Выберите действие:", reply_markup=menu_keyboard)"
 
 @bot.message_handler(commands=['help'])
 def send_help(message):
