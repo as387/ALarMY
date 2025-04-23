@@ -857,4 +857,11 @@ if __name__ == "__main__":
     ping_thread = threading.Thread(target=self_ping)
     ping_thread.daemon = True
     ping_thread.start()
+    bot.set_my_commands([
+        BotCommand("start", "Запуск бота и меню"),
+        BotCommand("help", "Отправить инструкцию"),
+        BotCommand("set_confirmation_interval", "Установить интервал повтора"),
+        BotCommand("list_reminders", "Показать список напоминаний"),
+        BotCommand("devmode", "Режим разработчика (админ)")
+    ])
     app.run(host="0.0.0.0", port=10000)
