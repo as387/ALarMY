@@ -436,7 +436,10 @@ def process_reminder(message):
             if reminder_datetime_moscow < now:
                 reminder_datetime_moscow += timedelta(days=1)
         reminder_datetime = reminder_datetime_moscow.astimezone(utc)
-        job_id = str(uuid.uuid4())
+        global job_counter
+        job_id = str(job_counter)
+        job_counter += 1
+
 
         # Сохраняем напоминание
         reminders[user_id].append({
@@ -565,7 +568,10 @@ def process_reminder(message):
 
         reminder_datetime = reminder_datetime_moscow.astimezone(utc)
 
-        job_id = str(uuid.uuid4())
+        global job_counter
+        job_id = str(job_counter)
+        job_counter += 1
+
         reminders[user_id].append({
             "time": reminder_datetime,
             "text": event,
@@ -669,7 +675,10 @@ def process_repeating_interval(message):
             first_run += timedelta(days=1)
 
         first_run_utc = first_run.astimezone(utc)
-        job_id = str(uuid.uuid4())
+        global job_counter
+        job_id = str(job_counter)
+        job_counter += 1
+
 
         if interval == 'день':
             scheduler.add_job(send_reminder, 'interval', days=1, start_date=first_run_utc,
