@@ -326,8 +326,10 @@ def handle_add(message):
     print("Добавление нажато")  # или logger.info(...)
 
 @bot.message_handler(func=lambda message: message.text == "🔁 Повтор")
-def handle_repeat(message):
-    add_repeating_reminder(message)
+def handle_repeat_button(message):
+    bot.send_message(message.chat.id, "🔧 Функция повтора пока не работает. Мы уже работаем над этим!", reply_markup=menu_keyboard)
+    return
+    # остальной код временно не выполняется
 
 @bot.message_handler(func=lambda message: message.text == "🗑 Удалить")
 def handle_delete(message):
