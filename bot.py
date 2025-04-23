@@ -205,6 +205,19 @@ def send_help(message):
 
     bot.send_message(message.chat.id, "Вот список доступных команд:")
 
+@bot.message_handler(commands=['restart'])
+def restart_command(message):
+    user_id = message.from_user.id
+
+    # Очистка временных данных, если используешь
+    confirmation_pending.pop(user_id, None)
+
+    bot.send_message(
+        message.chat.id,
+        "🔄 Бот перезапущен. Добро пожаловать! Используйте команды или меню, чтобы продолжить.",
+        reply_markup=menu_keyboard
+    )
+
 import json
 from datetime import datetime
 
@@ -257,17 +270,12 @@ def start_command(message):
         reply_markup=menu_keyboard
     )
 
-@bot.message_handler(commands=['done'])
+@bot.message_handler(regexp=r"^/done_[\w\-]+$")
 def handle_done_command(message):
     user_id = message.from_user.id
     ensure_user_exists(user_id)
 
-    parts = message.text.strip().split()
-    if len(parts) != 2:
-        bot.send_message(message.chat.id, "Формат команды: /done <id>")
-        return
-
-    job_id = parts[1]
+    job_id = message.text.replace("/done_", "").strip()
 
     for rem in reminders.get(user_id, []):
         if rem["job_id"] == job_id:
@@ -282,17 +290,12 @@ def handle_done_command(message):
 
     bot.send_message(message.chat.id, "Напоминание не найдено или уже подтверждено.", reply_markup=menu_keyboard)
 
-@bot.message_handler(commands=['skip'])
+@bot.message_handler(regexp=r"^/skip_[\w\-]+$")
 def handle_skip_command(message):
     user_id = message.from_user.id
     ensure_user_exists(user_id)
 
-    parts = message.text.strip().split()
-    if len(parts) != 2:
-        bot.send_message(message.chat.id, "Формат команды: /skip <id>")
-        return
-
-    job_id = parts[1]
+    job_id = message.text.replace("/skip_", "").strip()
 
     for rem in reminders.get(user_id, []):
         if rem["job_id"] == job_id:
@@ -738,9 +741,9 @@ def send_reminder(user_id, event, time, job_id):
                 
                 text_suffix = (
                     f"\n\nНажмите, если выполнили:\n"
-                    f"/done {job_id}\n"
+                    f"/done_{job_id}\n"
                     f"или пропустите:\n"
-                    f"/skip {job_id}"
+                    f"/skip_{job_id}"
                 )
                 break
 
@@ -953,6 +956,7 @@ if __name__ == "__main__":
         BotCommand("set_confirmation_interval", "Установить интервал для подтверждения"),
         BotCommand("list_reminders", "Показать список напоминаний"),
         BotCommand("interval", "Показать текущий интервал подтверждения"),
+        BotCommand("restart", "Перезапустить бота"),
         BotCommand("devmode", "Режим разработчика"),
         # Закомментированные команды не будут отображаться:
         # BotCommand("add_reminder", "Добавить одноразовое напоминание"),
