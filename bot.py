@@ -439,14 +439,12 @@ def process_reminder(message):
         reminder_datetime = reminder_datetime_moscow.astimezone(utc)
         global job_counter
         global id_counter
+        
         reminder_id = str(id_counter)
         id_counter += 1
         
         job_id = str(uuid.uuid4())  # это для планировщика, можно оставить
 
-        global id_counter
-        reminder_id = str(id_counter)
-        id_counter += 1
         
         reminders[user_id].append({
             "id": reminder_id,                # стабильный ID
