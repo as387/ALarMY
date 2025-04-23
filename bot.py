@@ -153,10 +153,8 @@ logger = logging.getLogger(__name__)
 moscow = timezone('Europe/Moscow')
 
 # Обработчик команды /list_reminders
-    # Логика для отображения напоминаний
-    reminders = get_all_reminders()  # Замените на вашу функцию получения напоминаний
-    reminder_text = "\n".join([f"{i+1}. {reminder}" for i, reminder in enumerate(reminders)])
-    bot.send_message(message.chat.id, reminder_text)
+    # Логика для отображения напоминаний    reminder_text = "\n".join([f"{i+1}. {reminder}" for i, reminder in enumerate(reminders)])
+
 
 def back_to_menu_keyboard():
     keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
