@@ -78,7 +78,6 @@ def toggle_repeat_mode(message):
 
     if not reminders[user_id]:
         bot.send_message(message.chat.id, "У вас нет активных напоминаний.", reply_markup=menu_keyboard)
-        return
 
     bot.send_message(message.chat.id, "Введите номера напоминаний, для которых включить/отключить подтверждение.", reply_markup=back_to_menu_keyboard())
     bot.clear_step_handler_by_chat_id(message.chat.id)
@@ -86,7 +85,6 @@ def toggle_repeat_mode(message):
 
 def process_repeat_selection(message):
     if message.text == "↩️ Назад в меню":
-        return back_to_main_menu(message)
 
     user_id = message.from_user.id
     ensure_user_exists(user_id)
@@ -147,7 +145,6 @@ def list_reminders(message):
 def back_to_menu_keyboard():
     keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
     keyboard.add(types.KeyboardButton("↩️ Назад в меню"))
-    return keyboard
 
 import json
 
@@ -204,7 +201,6 @@ def send_help(message):
     bot.set_my_commands([
         BotCommand("help", "Отправить инструкцию"),
         BotCommand("set_confirmation_interval", "Установить интервал для подтверждения"),
-        BotCommand("list_reminders", "Показать список напоминаний"),
         BotCommand("devmode", "Режим разработчика"),
         # Закомментированные команды не будут отображаться:
         # BotCommand("add_reminder", "Добавить одноразовое напоминание"),
@@ -284,7 +280,6 @@ def handle_delete(message):
 
     if not reminders[user_id]:
         bot.send_message(message.chat.id, "У вас нет активных напоминаний.", reply_markup=menu_keyboard)
-        return
 
     bot.send_message(message.chat.id, "Введите номера напоминаний для удаления (через пробел):", reply_markup=back_to_menu_keyboard())
     bot.clear_step_handler_by_chat_id(message.chat.id)
@@ -298,7 +293,6 @@ def handle_confirm(message):
 
     if not reminders[user_id]:
         bot.send_message(message.chat.id, "У вас нет активных напоминаний.", reply_markup=menu_keyboard)
-        return
 
     bot.send_message(message.chat.id, "Введите номера напоминаний, для которых включить/отключить подтверждение (через пробел):", reply_markup=back_to_menu_keyboard())
     bot.clear_step_handler_by_chat_id(message.chat.id)
@@ -315,18 +309,15 @@ ADMIN_ID = 941791842  # замени на свой
 def show_users(message):
     if message.from_user.id != ADMIN_ID:
         bot.send_message(message.chat.id, "⛔ Эта команда доступна только администратору.")
-        return
 
     try:
         with open("users.json", "r", encoding="utf-8") as f:
             users = json.load(f)
     except FileNotFoundError:
         bot.send_message(message.chat.id, "📂 Нет зарегистрированных пользователей.")
-        return
 
     if not users:
         bot.send_message(message.chat.id, "😶 Пользователей не найдено.")
-        return
 
     response = ""
     for uid, data in users.items():
@@ -359,7 +350,6 @@ def add_reminder(message):
 
 def process_reminder(message):
     if message.text == "↩️ Назад в меню":
-        return back_to_main_menu(message)
     
     user_id = message.from_user.id
     ensure_user_exists(user_id)
@@ -428,7 +418,6 @@ def show_reminders(message):
 
     if not reminders[user_id]:
         bot.send_message(message.chat.id, "У вас нет активных напоминаний.", reply_markup=menu_keyboard)
-        return
 
     sorted_reminders = sorted(reminders[user_id], key=lambda item: item["time"])
     text = "Ваши напоминания:\n"
@@ -450,7 +439,7 @@ def show_reminders(message):
         text += line + "\n"
 
     keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    keyboard.add(types.KeyboardButton("🗑 Удалить"), types.KeyboardButton("✅ Подтв."))
+    keyboard.add(types.KeyboardButton("🗑 Удалить"), types.KeyboardButton("✅"))
     keyboard.add(types.KeyboardButton("↩️ Назад в меню"))
 
     bot.send_message(message.chat.id, text, reply_markup=keyboard)
@@ -462,18 +451,15 @@ ADMIN_ID = 941791842  # замени на свой Telegram ID
 def show_users(message):
     if message.from_user.id != ADMIN_ID:
         bot.send_message(message.chat.id, "⛔ Эта команда доступна только администратору.")
-        return
 
     try:
         with open("users.json", "r", encoding="utf-8") as f:
             users = json.load(f)
     except FileNotFoundError:
         bot.send_message(message.chat.id, "📂 Нет зарегистрированных пользователей.")
-        return
 
     if not users:
         bot.send_message(message.chat.id, "😶 Пользователей не найдено.")
-        return
 
     response = "👥 Пользователи:\n"
     for uid, data in users.items():
@@ -487,7 +473,6 @@ def show_users(message):
 
 def process_reminder(message):
     if message.text == "↩️ Назад в меню":
-        return back_to_main_menu(message)
     
     user_id = message.from_user.id
     ensure_user_exists(user_id)
@@ -549,7 +534,6 @@ def add_repeating_reminder(message):
 def ask_repeat_interval(message):
 
     if message.text == "↩️ Назад в меню":
-        return back_to_main_menu(message)
     
     user_id = message.from_user.id
     try:
@@ -580,14 +564,12 @@ def ask_repeat_interval(message):
 def process_repeating_interval(message):
 
     if message.text == "↩️ Назад в меню":
-        return back_to_main_menu(message)
     
     user_id = message.from_user.id
     data = temp_repeating.get(user_id)
     
     if not data:
         bot.send_message(message.chat.id, "Что-то пошло не так. Начните заново.")
-        return
     
     time_str = data["time_str"]
     event = data["event"]
@@ -607,7 +589,6 @@ def process_repeating_interval(message):
         bot.send_message(message.chat.id, "Непонятный интервал. Попробуйте снова.")
         bot.clear_step_handler_by_chat_id(message.chat.id)
         bot.register_next_step_handler(message, process_repeating_interval)
-        return
 
     try:
         moscow = timezone('Europe/Moscow')
@@ -655,7 +636,6 @@ def process_repeating_interval(message):
 def process_remove_input(message):
 
     if message.text == "↩️ Назад в меню":
-        return back_to_main_menu(message)
     
     user_id = message.from_user.id
     ensure_user_exists(user_id)
@@ -681,7 +661,6 @@ def send_reminder(user_id, event, time, job_id):
         reminder_time_utc = datetime.utcnow()
         reminder_time_msk = utc.localize(reminder_time_utc).astimezone(moscow).strftime('%H:%M')
 
-        from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
         
         keyboard = None
         text_suffix = ""
@@ -689,18 +668,20 @@ def send_reminder(user_id, event, time, job_id):
         # Добавляем кнопки только если нужно подтверждение
         for rem in reminders.get(user_id, []):
             if rem["job_id"] == job_id and rem.get("needs_confirmation"):
-                keyboard = InlineKeyboardMarkup()
-                keyboard.row(
-                    InlineKeyboardButton("✅ Подтвердить", callback_data=f"confirm:{job_id}"),
-                    InlineKeyboardButton("🚫 Пропустить", callback_data=f"skip:{job_id}")
                 )
                 text_suffix = "\n\nНажмите, если выполнили:"
-                break
         
+        reply_kb = ReplyKeyboardMarkup(resize_keyboard=True)
+        reply_kb.add(KeyboardButton("✅"), KeyboardButton("❌"))
+            user_id,
+            f"🔔 Напоминание: {event} (в {reminder_time_msk} по МСК){text_suffix}",
+        reply_kb = ReplyKeyboardMarkup(resize_keyboard=True)
+        reply_kb.add(KeyboardButton("✅"))
         bot.send_message(
             user_id,
             f"🔔 Напоминание: {event} (в {reminder_time_msk} по МСК){text_suffix}",
-            reply_markup=keyboard or ReplyKeyboardMarkup()
+            reply_markup=reply_kb
+        )
         )
 
         logger.info(f"[REMINDER] Sent to user {user_id}")
@@ -710,7 +691,6 @@ def send_reminder(user_id, event, time, job_id):
     for rem in reminders.get(user_id, []):
         if rem["job_id"] == job_id:
             if rem.get("is_repeating"):
-                return  # Повторяющееся само себе продолжит
             if rem.get("needs_confirmation"):
                 # Перезапуск через repeat_interval минут
                 interval = rem.get("repeat_interval", 30)
@@ -735,12 +715,9 @@ def telegram_webhook():
         json_str = request.get_data().decode("utf-8")
         update = telebot.types.Update.de_json(json_str)
         bot.process_new_updates([update])
-        return "ok", 200
-    return "Invalid request", 400
 
 @app.route("/", methods=["GET"])
 def root():
-    return "It works!", 200
 
 import threading
 import requests
@@ -762,7 +739,6 @@ def toggle_repeat_mode(message):
 
     if not reminders[user_id]:
         bot.send_message(message.chat.id, "У вас нет активных напоминаний.", reply_markup=menu_keyboard)
-        return
 
     bot.send_message(message.chat.id, "Введите номера напоминаний, для которых включить/отключить подтверждение.", reply_markup=back_to_menu_keyboard())
     bot.clear_step_handler_by_chat_id(message.chat.id)
@@ -770,7 +746,6 @@ def toggle_repeat_mode(message):
 
 def process_repeat_selection(message):
     if message.text == "↩️ Назад в меню":
-        return back_to_main_menu(message)
 
     user_id = message.from_user.id
     ensure_user_exists(user_id)
@@ -793,7 +768,11 @@ def process_repeat_selection(message):
         save_reminders()
         bot.send_message(
             message.chat.id,
-            "✅ Обновлено! Повтор через 30 мин. (если включено)",
+        bot.send_message(
+            message.chat.id,
+            f"✅ Обновлено! Повтор через {confirmation_interval} мин. (если включено)",
+            reply_markup=menu_keyboard
+        )
             reply_markup=menu_keyboard
         )
     except Exception as e:
@@ -805,7 +784,6 @@ def confirm_done(message):
     parts = message.text.strip().split()
     if len(parts) != 2:
         bot.send_message(message.chat.id, "Формат: /done <job_id>")
-        return
 
     job_id = parts[1]
     user_id = message.from_user.id
@@ -821,15 +799,10 @@ def confirm_done(message):
                 pass
             save_reminders()
             bot.send_message(message.chat.id, f"✅ Напоминание «{rem['text']}» подтверждено и больше не будет повторяться.")
-            return
 
     bot.send_message(message.chat.id, "❌ Напоминание не найдено или уже подтверждено.")
 
-@bot.callback_query_handler(func=lambda call: call.data.startswith("confirm:") or call.data.startswith("skip:"))
-def handle_confirmation(call):
-    user_id = call.from_user.id
     ensure_user_exists(user_id)
-    action, job_id = call.data.split(":")
 
     for rem in reminders[user_id]:
         if rem["job_id"] == job_id:
@@ -841,12 +814,8 @@ def handle_confirmation(call):
                 except:
                     pass
                 save_reminders()
-                bot.answer_callback_query(call.id, "✅ Подтверждено!")
-                bot.edit_message_reply_markup(call.message.chat.id, call.message.message_id, reply_markup=None)
                 bot.send_message(user_id, f"Напоминание «{rem['text']}» отмечено как выполненное.")
             elif action == "skip":
-                bot.answer_callback_query(call.id, "🔄 Напоминание останется активным.")
-            return
 
     
 # === 7. Главный блок запуска ===
@@ -861,7 +830,6 @@ if __name__ == "__main__":
         BotCommand("start", "Запуск бота и меню"),
         BotCommand("help", "Отправить инструкцию"),
         BotCommand("set_confirmation_interval", "Установить интервал повтора"),
-        BotCommand("list_reminders", "Показать список напоминаний"),
         BotCommand("devmode", "Режим разработчика (админ)")
     ])
     app.run(host="0.0.0.0", port=10000)
