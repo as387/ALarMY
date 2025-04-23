@@ -676,7 +676,10 @@ def send_reminder(user_id, event, time, job_id):
 
         for rem in reminders.get(user_id, []):
             if rem["job_id"] == job_id and rem.get("needs_confirmation"):
-                confirmation_pending[user_id] = job_id
+                confirmation_pending[user_id] = {
+                    "job_id": job_id,
+                    "text": event
+                }
                 keyboard = ReplyKeyboardMarkup(resize_keyboard=True)
                 keyboard.add(KeyboardButton("✅ Подтвердить"), KeyboardButton("🚫 Пропустить"))
                 text_suffix = "\n\nНажмите кнопку, если выполнили:"
@@ -823,7 +826,12 @@ def show_confirmation_interval(message):
 def handle_confirm(message):
     user_id = message.from_user.id
     ensure_user_exists(user_id)
-    job_id = confirmation_pending.get(user_id)
+    pending = confirmation_pending.get(user_id)
+    if not pending:
+        bot.send_message(message.chat.id, "Нет активного напоминания.", reply_markup=menu_keyboard)
+        return
+    
+    job_id = pending["job_id"]
 
     if not job_id:
         bot.send_message(message.chat.id, "Нет активного напоминания.", reply_markup=menu_keyboard)
