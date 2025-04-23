@@ -685,7 +685,7 @@ def send_reminder(user_id, event, time, job_id):
                 text_suffix = "\n\nНажмите кнопку, если выполнили:"
                 break
 
-        bot.send_message(
+        msg = bot.send_message(
             user_id,
             f"🔔 Напоминание: {event} (в {reminder_time_msk} по МСК){text_suffix}\n\n[#ID:{job_id}]",
             reply_markup=keyboard or ReplyKeyboardMarkup()
