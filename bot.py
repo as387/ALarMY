@@ -874,7 +874,7 @@ if __name__ == "__main__":
     load_reminders()
     restore_jobs()
 
-        bot.set_my_commands([
+    bot.set_my_commands([
         BotCommand("start", "Главное меню"),
         BotCommand("help", "Отправить инструкцию"),
         BotCommand("set_confirmation_interval", "Установить интервал для подтверждения"),
