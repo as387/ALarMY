@@ -67,6 +67,7 @@ bot = telebot.TeleBot(BOT_TOKEN)
 app = Flask(__name__)
 
 # Переменная для хранения интервала (по умолчанию 30 минут)
+confirmation_pending = {}  # user_id -> job_id ожидание подтверждения
 confirmation_interval = 30
 
 # Команда /help - отправка инструкции в PDF
@@ -680,6 +681,7 @@ def send_reminder(user_id, event, time, job_id):
                 text_suffix = "\n\nНажмите, если выполнили:"
                 break
         
+        confirmation_pending[user_id] = job_id
         bot.send_message(
             user_id,
             f"🔔 Напоминание: {event} (в {reminder_time_msk} по МСК){text_suffix}",
@@ -837,3 +839,48 @@ if __name__ == "__main__":
     ping_thread.daemon = True
     ping_thread.start()
     app.run(host="0.0.0.0", port=10000)
+
+@bot.message_handler(func=lambda message: message.text in ["✅", "❌"])
+def handle_confirmation_response(message):
+    user_id = message.from_user.id
+    ensure_user_exists(user_id)
+
+    job_id = confirmation_pending.get(user_id)
+    if not job_id:
+        bot.send_message(message.chat.id, "Нет активного напоминания для подтверждения.")
+        return
+
+    for rem in reminders[user_id]:
+        if rem["job_id"] == job_id:
+            if message.text == "✅":
+                reminders[user_id].remove(rem)
+                bot.send_message(message.chat.id, f"✅ Напоминание «{rem['text']}» удалено.", reply_markup=menu_keyboard)
+            elif message.text == "❌":
+                interval = rem.get("repeat_interval", confirmation_interval)
+                new_time = datetime.utcnow() + timedelta(minutes=interval)
+                new_job_id = str(uuid.uuid4())
+                rem["time"] = new_time
+                rem["job_id"] = new_job_id
+                scheduler.add_job(send_reminder, 'date', run_date=new_time,
+                                  args=[user_id, rem['text'], new_time.strftime("%H:%M"), new_job_id], id=new_job_id)
+                bot.send_message(message.chat.id, f"🔄 Перенесено на {interval} минут.", reply_markup=menu_keyboard)
+            break
+
+    confirmation_pending.pop(user_id, None)
+    save_reminders()
+
+
+@bot.message_handler(commands=['restart'])
+def restart_bot(message):
+    user_id = message.from_user.id
+    ensure_user_exists(user_id)
+
+    for rem in reminders[user_id]:
+        try:
+            scheduler.remove_job(rem["job_id"])
+        except:
+            pass
+    reminders[user_id] = []
+    save_reminders()
+
+    bot.send_message(message.chat.id, "🔄 Бот перезапущен. Все напоминания удалены.", reply_markup=menu_keyboard)
