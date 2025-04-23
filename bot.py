@@ -257,8 +257,63 @@ def start_command(message):
         reply_markup=menu_keyboard
     )
 
-@bot.message_handler(func=lambda message: message.text == "🆕 Добавить")
+@bot.message_handler(commands=['done'])
+def handle_done_command(message):
+    user_id = message.from_user.id
+    ensure_user_exists(user_id)
 
+    parts = message.text.strip().split()
+    if len(parts) != 2:
+        bot.send_message(message.chat.id, "Формат команды: /done <id>")
+        return
+
+    job_id = parts[1]
+
+    for rem in reminders.get(user_id, []):
+        if rem["job_id"] == job_id:
+            try:
+                scheduler.remove_job(job_id)
+            except:
+                pass
+            reminders[user_id].remove(rem)
+            save_reminders()
+            bot.send_message(message.chat.id, f"✅ Напоминание «{rem['text']}» подтверждено и удалено.", reply_markup=menu_keyboard)
+            return
+
+    bot.send_message(message.chat.id, "Напоминание не найдено или уже подтверждено.", reply_markup=menu_keyboard)
+
+@bot.message_handler(commands=['skip'])
+def handle_skip_command(message):
+    user_id = message.from_user.id
+    ensure_user_exists(user_id)
+
+    parts = message.text.strip().split()
+    if len(parts) != 2:
+        bot.send_message(message.chat.id, "Формат команды: /skip <id>")
+        return
+
+    job_id = parts[1]
+
+    for rem in reminders.get(user_id, []):
+        if rem["job_id"] == job_id:
+            interval = rem.get("repeat_interval", confirmation_interval)
+            new_job_id = str(uuid.uuid4())
+            rem["time"] = datetime.utcnow() + timedelta(minutes=interval)
+            rem["job_id"] = new_job_id
+            scheduler.add_job(
+                send_reminder,
+                trigger='date',
+                run_date=rem["time"],
+                args=[user_id, rem["text"], rem["time"].strftime("%H:%M"), new_job_id],
+                id=new_job_id
+            )
+            save_reminders()
+            bot.send_message(message.chat.id, f"🔁 Перенесено на {interval} минут: {rem['text']}", reply_markup=menu_keyboard)
+            return
+
+    bot.send_message(message.chat.id, "Напоминание не найдено или уже обработано.", reply_markup=menu_keyboard)
+
+@bot.message_handler(func=lambda message: message.text == "🆕 Добавить")
 def handle_add(message):
     add_reminder(message)  # Вызывает уже существующую функцию
     print("Добавление нажато")  # или logger.info(...)
@@ -680,15 +735,19 @@ def send_reminder(user_id, event, time, job_id):
                     "job_id": job_id,
                     "text": event
                 }
-                keyboard = ReplyKeyboardMarkup(resize_keyboard=True)
-                keyboard.add(KeyboardButton("✅ Подтвердить"), KeyboardButton("🚫 Пропустить"))
-                text_suffix = "\n\nНажмите кнопку, если выполнили:"
+                
+                text_suffix = (
+                    f"\n\nНажмите, если выполнили:\n"
+                    f"/done {job_id}\n"
+                    f"или пропустите:\n"
+                    f"/skip {job_id}"
+                )
                 break
 
         msg = bot.send_message(
             user_id,
             f"🔔 Напоминание: {event} (в {reminder_time_msk} по МСК){text_suffix}\n\n[#ID:{job_id}]",
-            reply_markup=keyboard or ReplyKeyboardMarkup()
+            reply_markup=menu_keyboard  # или None
         )
 
         logger.info(f"[REMINDER] Sent to user {user_id}")
