@@ -137,6 +137,7 @@ def process_repeat_selection(message):
                     rem["repeat_interval"] = confirmation_interval
 
         save_reminders()
+    bot.send_message(message.chat.id, "🔙 Возвращаю в главное меню", reply_markup=menu_keyboard)
         bot.send_message(
             message.chat.id,
             f"✅ Обновлено! Повтор через {confirmation_interval} мин. (если включено)",
@@ -227,6 +228,7 @@ def send_help(message):
     # Устанавливаем команды, которые будут отображаться в меню бота
     
     bot.set_my_commands([
+        BotCommand("restart", "Перезапустить и очистить напоминания"),
         BotCommand("start", "Запуск бота"),
         BotCommand("help", "Помощь"),
         BotCommand("set_confirmation_interval", "Интервал подтверждения"),
@@ -256,23 +258,29 @@ def save_user_info(user):
         with open("users.json", "w", encoding="utf-8") as f:
             json.dump(users, f, ensure_ascii=False, indent=2)
 
+
 @bot.message_handler(commands=['start'])
 def start_command(message):
     user_id = message.from_user.id
-
-    # Обеспечиваем, что пользователь записан
     ensure_user_exists(user_id)
     save_user_info(message.from_user)
-
-    # Сбрасываем возможные "ожидающие шаги"
     bot.clear_step_handler_by_chat_id(message.chat.id)
 
-    # Возвращаем главное меню
+    bot.set_my_commands([
+        BotCommand("start", "Запуск бота"),
+        BotCommand("help", "Помощь"),
+        BotCommand("set_confirmation_interval", "Интервал подтверждения"),
+        BotCommand("devmode", "Режим разработчика"),
+        BotCommand("restart", "Перезапуск и очистка"),
+    ])
+
     bot.send_message(
         message.chat.id,
-        "Главное меню:\nВыберите действие:",
+        "Главное меню:
+Выберите действие:",
         reply_markup=menu_keyboard
     )
+
 
 @bot.message_handler(func=lambda message: message.text == "🆕 Добавить")
 
@@ -384,6 +392,7 @@ def process_reminder(message):
             "needs_confirmation": False
         })
         save_reminders()
+    bot.send_message(message.chat.id, "🔙 Возвращаю в главное меню", reply_markup=menu_keyboard)
 
         scheduler.add_job(
             send_reminder,
@@ -512,6 +521,7 @@ def process_reminder(message):
             "needs_confirmation": False
         })
         save_reminders()
+    bot.send_message(message.chat.id, "🔙 Возвращаю в главное меню", reply_markup=menu_keyboard)
 
         scheduler.add_job(
             send_reminder,
@@ -624,6 +634,7 @@ def process_repeating_interval(message):
             "needs_confirmation": False
         })
         save_reminders()
+    bot.send_message(message.chat.id, "🔙 Возвращаю в главное меню", reply_markup=menu_keyboard)
         
         if interval == "день":
             form = "каждый день"
@@ -658,6 +669,7 @@ def process_remove_input(message):
             reminders[user_id].remove(rem)
         
         save_reminders()
+    bot.send_message(message.chat.id, "🔙 Возвращаю в главное меню", reply_markup=menu_keyboard)
         bot.send_message(message.chat.id, "✅ Напоминания удалены.", reply_markup=menu_keyboard)
 
     except Exception:
@@ -709,9 +721,11 @@ def send_reminder(user_id, event, time, job_id):
                 )
                 rem["job_id"] = new_job_id
                 save_reminders()
+    bot.send_message(message.chat.id, "🔙 Возвращаю в главное меню", reply_markup=menu_keyboard)
             else:
                 reminders[user_id] = [r for r in reminders[user_id] if r["job_id"] != job_id]
                 save_reminders()
+    bot.send_message(message.chat.id, "🔙 Возвращаю в главное меню", reply_markup=menu_keyboard)
 
 @app.route("/", methods=["POST"])
 def telegram_webhook():
@@ -775,6 +789,7 @@ def process_repeat_selection(message):
                     rem["needs_confirmation"] = True  # Устанавливаем необходимость подтверждения
 
         save_reminders()
+    bot.send_message(message.chat.id, "🔙 Возвращаю в главное меню", reply_markup=menu_keyboard)
         bot.send_message(
             message.chat.id,
             "✅ Обновлено! Повтор через {} мин. (если включено)".format(confirmation_interval),
@@ -804,6 +819,7 @@ def confirm_done(message):
             except:
                 pass
             save_reminders()
+    bot.send_message(message.chat.id, "🔙 Возвращаю в главное меню", reply_markup=menu_keyboard)
             bot.send_message(message.chat.id, f"✅ Напоминание «{rem['text']}» подтверждено и больше не будет повторяться.")
             return
 
@@ -823,6 +839,7 @@ def confirm_done(message):
                 except:
                     pass
                 save_reminders()
+    bot.send_message(message.chat.id, "🔙 Возвращаю в главное меню", reply_markup=menu_keyboard)
                 bot.answer_callback_query(call.id, "✅ Подтверждено!")
                 bot.edit_message_reply_markup(call.message.chat.id, call.message.message_id, reply_markup=None)
                 bot.send_message(user_id, f"Напоминание «{rem['text']}» отмечено как выполненное.")
@@ -868,6 +885,7 @@ def handle_confirmation_response(message):
 
     confirmation_pending.pop(user_id, None)
     save_reminders()
+    bot.send_message(message.chat.id, "🔙 Возвращаю в главное меню", reply_markup=menu_keyboard)
 
 
 @bot.message_handler(commands=['restart'])
@@ -882,5 +900,6 @@ def restart_bot(message):
             pass
     reminders[user_id] = []
     save_reminders()
+    bot.send_message(message.chat.id, "🔙 Возвращаю в главное меню", reply_markup=menu_keyboard)
 
     bot.send_message(message.chat.id, "🔄 Бот перезапущен. Все напоминания удалены.", reply_markup=menu_keyboard)
