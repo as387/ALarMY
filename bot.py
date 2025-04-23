@@ -682,7 +682,7 @@ def send_reminder(user_id, event, time, job_id):
         reminder_time_utc = datetime.utcnow()
         reminder_time_msk = utc.localize(reminder_time_utc).astimezone(moscow).strftime('%H:%M')
 
-       keyboard = None
+        keyboard = None
         text_suffix = ""
         
         for rem in reminders.get(user_id, []):
