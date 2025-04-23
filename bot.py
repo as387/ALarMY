@@ -33,6 +33,7 @@ menu_keyboard.add(
     KeyboardButton("📋 Напоминания")
 )
 
+confirmation_pending = {}
 
 temp_repeating = {}
 
@@ -681,22 +682,17 @@ def send_reminder(user_id, event, time, job_id):
         reminder_time_utc = datetime.utcnow()
         reminder_time_msk = utc.localize(reminder_time_utc).astimezone(moscow).strftime('%H:%M')
 
-        from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
-        
-        keyboard = None
+       keyboard = None
         text_suffix = ""
         
-        # Добавляем кнопки только если нужно подтверждение
         for rem in reminders.get(user_id, []):
             if rem["job_id"] == job_id and rem.get("needs_confirmation"):
-                keyboard = InlineKeyboardMarkup()
-                keyboard.row(
-                    InlineKeyboardButton("✅ Подтвердить", callback_data=f"confirm:{job_id}"),
-                    InlineKeyboardButton("🚫 Пропустить", callback_data=f"skip:{job_id}")
-                )
-                text_suffix = "\n\nНажмите, если выполнили:"
+                confirmation_pending[user_id] = job_id
+                keyboard = ReplyKeyboardMarkup(resize_keyboard=True)
+                keyboard.add(KeyboardButton("✅ Подтвердить"), KeyboardButton("🚫 Пропустить"))
+                text_suffix = "\n\nНажмите кнопку, если выполнили:"
                 break
-        
+
         bot.send_message(
             user_id,
             f"🔔 Напоминание: {event} (в {reminder_time_msk} по МСК){text_suffix}",
@@ -825,15 +821,19 @@ def confirm_done(message):
 
     bot.send_message(message.chat.id, "❌ Напоминание не найдено или уже подтверждено.")
 
-@bot.callback_query_handler(func=lambda call: call.data.startswith("confirm:") or call.data.startswith("skip:"))
-def handle_confirmation(call):
-    user_id = call.from_user.id
+@bot.message_handler(func=lambda message: message.text in ["✅ Подтвердить", "🚫 Пропустить"])
+def handle_confirmation_text(message):
+    user_id = message.from_user.id
     ensure_user_exists(user_id)
-    action, job_id = call.data.split(":")
+    job_id = confirmation_pending.get(user_id)
+
+    if not job_id:
+        bot.send_message(message.chat.id, "Нет активного напоминания.", reply_markup=menu_keyboard)
+        return
 
     for rem in reminders[user_id]:
         if rem["job_id"] == job_id:
-            if action == "confirm":
+            if message.text == "✅ Подтвердить":
                 rem["needs_confirmation"] = False
                 rem.pop("repeat_interval", None)
                 try:
@@ -841,13 +841,24 @@ def handle_confirmation(call):
                 except:
                     pass
                 save_reminders()
-                bot.answer_callback_query(call.id, "✅ Подтверждено!")
-                bot.edit_message_reply_markup(call.message.chat.id, call.message.message_id, reply_markup=None)
-                bot.send_message(user_id, f"Напоминание «{rem['text']}» отмечено как выполненное.")
-            elif action == "skip":
-                bot.answer_callback_query(call.id, "🔄 Напоминание останется активным.")
-            return
+                bot.send_message(message.chat.id, f"✅ Напоминание «{rem['text']}» подтверждено и больше не будет повторяться.")
+            elif message.text == "🚫 Пропустить":
+                interval = rem.get("repeat_interval", confirmation_interval)
+                new_job_id = str(uuid.uuid4())
+                rem["time"] = datetime.utcnow() + timedelta(minutes=interval)
+                rem["job_id"] = new_job_id
+                scheduler.add_job(
+                    send_reminder,
+                    trigger='date',
+                    run_date=rem["time"],
+                    args=[user_id, rem["text"], rem["time"].strftime("%H:%M"), new_job_id],
+                    id=new_job_id
+                )
+                save_reminders()
+                bot.send_message(message.chat.id, f"🔁 Перенесено на {interval} минут: {rem['text']}")
+            break
 
+    confirmation_pending.pop(user_id, None)
     
 # === 7. Главный блок запуска ===
 if __name__ == "__main__":
