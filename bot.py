@@ -44,7 +44,6 @@ app = Flask(__name__)
 confirmation_interval = 30
 
 # Команда /help - отправка инструкции в PDF
-@bot.message_handler(commands=['help'])
 def send_help(message):
     try:
         # Убедитесь, что путь к файлу правильный
@@ -200,7 +199,6 @@ from telebot.types import BotCommand, BotCommandScopeChatMember
 
 ADMIN_ID = 941791842  # замени на свой Telegram ID
 
-@bot.message_handler(commands=['start', 'help'])
 def send_help(message):
     # Устанавливаем команды, которые будут отображаться в меню бота
     bot.set_my_commands([
@@ -239,7 +237,19 @@ def save_user_info(user):
             json.dump(users, f, ensure_ascii=False, indent=2)
 
 # === 2. Блок общих команд ===
-@bot.message_handler(commands=['start'])
+@bot.message_handler(commands=['start', 'help'])
+def handle_start_help(message):
+    bot.clear_step_handler_by_chat_id(message.chat.id)
+    if message.text.startswith('/start'):
+        ensure_user_exists(message.from_user.id)
+        save_user_info(message.from_user)
+        bot.send_message(message.chat.id, "Главное меню:\nВыберите действие:", reply_markup=menu_keyboard)
+    elif message.text.startswith('/help'):
+        try:
+            with open("instruction_extended.txt", "rb") as txt_file:
+                bot.send_document(message.chat.id, txt_file, reply_markup=menu_keyboard)
+        except FileNotFoundError:
+            bot.send_message(message.chat.id, "Извините, файл с инструкцией не найден.", reply_markup=menu_keyboard)
 def start_command(message):
     user_id = message.from_user.id
 
@@ -324,11 +334,11 @@ def show_users(message):
         joined = data.get("joined_at", "время не указано")
         response += f"{uname}, [{joined}]\n"
 
-    bot.send_message(message.chat.id, response)
+    bot.send_message(message.chat.id, response, reply_markup=menu_keyboard)
 
 @bot.message_handler(commands=['ping'])
 def test_ping(message):
-    bot.send_message(message.chat.id, "Пинг ок!")
+    bot.send_message(message.chat.id, "Пинг ок!", reply_markup=menu_keyboard)
 
 @bot.message_handler(commands=['dump'])
 def dump_reminders(message):
@@ -338,7 +348,7 @@ def dump_reminders(message):
         # Отправляем в виде кода, чтобы сохранить формат
         bot.send_message(message.chat.id, f"```json\n{data}\n```", parse_mode="Markdown")
     except FileNotFoundError:
-        bot.send_message(message.chat.id, "Файл reminders.json не найден.")
+        bot.send_message(message.chat.id, "Файл reminders.json не найден.", reply_markup=menu_keyboard)
 
 @bot.message_handler(func=lambda message: message.text == "Добавить напоминание")
 # === 4. Блок функций для напоминаний ===
@@ -472,7 +482,7 @@ def show_users(message):
         joined = data.get("joined_at", "время не указано")
         response += f"\n🆔 {uid} — {name} {uname}\n🕒 Зашёл: {joined}\n"
 
-    bot.send_message(message.chat.id, response)
+    bot.send_message(message.chat.id, response, reply_markup=menu_keyboard)
 
 
 def process_reminder(message):
