@@ -202,20 +202,7 @@ ADMIN_ID = 941791842  # замени на свой Telegram ID
 
 def send_help(message):
     # Устанавливаем команды, которые будут отображаться в меню бота
-    bot.set_my_commands([
-        BotCommand("start", "Главное меню"),
-        BotCommand("help", "Отправить инструкцию"),
-        BotCommand("set_confirmation_interval", "Установить интервал для подтверждения"),
-        BotCommand("list_reminders", "Показать список напоминаний"),
-        BotCommand("interval", "Показать текущий интервал подтверждения"),
-        BotCommand("devmode", "Режим разработчика"),
-        # Закомментированные команды не будут отображаться:
-        # BotCommand("add_reminder", "Добавить одноразовое напоминание"),
-        # BotCommand("set_repeating_reminder", "Добавить повторяющееся напоминание"),
-        # BotCommand("manage_reminder", "Управлять напоминаниями"),
-        # BotCommand("delete_reminder", "Удалить напоминание"),
-        # BotCommand("ping", "Проверка работоспособности бота")
-    ])
+
     bot.send_message(message.chat.id, "Вот список доступных команд:")
 
 import json
@@ -447,17 +434,16 @@ def show_reminders(message):
                 line += f" 🔁 ({interval_text})"
 
         if rem.get("needs_confirmation"):
-            bot.send_message(user_id, f"🔁 Перенесено на {confirmation_interval} минут: {rem['text']}")
+            interval = rem.get("repeat_interval", confirmation_interval)
             line += f", 🚨 ({interval})"
 
         text += line + "\n"
 
     keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    keyboard.add(types.KeyboardButton("🗑 Удалить"), types.KeyboardButton("✅ Подтв."))
+    keyboard.add(types.KeyboardButton("✅ Подтв."), types.KeyboardButton("🗑 Удалить"))
     keyboard.add(types.KeyboardButton("↩️ Назад в меню"))
 
     bot.send_message(message.chat.id, text, reply_markup=keyboard)
-
 
 ADMIN_ID = 941791842  # замени на свой Telegram ID
 
@@ -831,8 +817,8 @@ def show_confirmation_interval(message):
         reply_markup=menu_keyboard
     )
 
-@bot.message_handler(func=lambda message: message.text in ["✅ Подтвердить", "🚫 Пропустить"])
-def handle_confirmation_text(message):
+@bot.message_handler(func=lambda message: message.text == "✅ Подтвердить")
+def handle_confirm(message):
     user_id = message.from_user.id
     ensure_user_exists(user_id)
     job_id = confirmation_pending.get(user_id)
@@ -843,28 +829,42 @@ def handle_confirmation_text(message):
 
     for rem in reminders[user_id]:
         if rem["job_id"] == job_id:
-            if message.text == "✅ Подтвердить":
-                try:
-                    scheduler.remove_job(job_id)
-                except:
-                    pass
-                reminders[user_id].remove(rem)  # Удаляем само напоминание
-                save_reminders()
-                bot.send_message(message.chat.id, f"✅ Напоминание «{rem['text']}» подтверждено и удалено.")
-            elif message.text == "🚫 Пропустить":
-                interval = rem.get("repeat_interval", confirmation_interval)
-                new_job_id = str(uuid.uuid4())
-                rem["time"] = datetime.utcnow() + timedelta(minutes=interval)
-                rem["job_id"] = new_job_id
-                scheduler.add_job(
-                    send_reminder,
-                    trigger='date',
-                    run_date=rem["time"],
-                    args=[user_id, rem["text"], rem["time"].strftime("%H:%M"), new_job_id],
-                    id=new_job_id
-                )
-                save_reminders()
-                bot.send_message(message.chat.id, f"🔁 Перенесено на {interval} минут: {rem['text']}")
+            try:
+                scheduler.remove_job(job_id)
+            except:
+                pass
+            reminders[user_id].remove(rem)
+            save_reminders()
+            bot.send_message(message.chat.id, f"✅ Напоминание «{rem['text']}» подтверждено и удалено.")
+            break
+
+    confirmation_pending.pop(user_id, None)
+
+@bot.message_handler(func=lambda message: message.text == "🚫 Пропустить")
+def handle_skip(message):
+    user_id = message.from_user.id
+    ensure_user_exists(user_id)
+    job_id = confirmation_pending.get(user_id)
+
+    if not job_id:
+        bot.send_message(message.chat.id, "Нет активного напоминания.", reply_markup=menu_keyboard)
+        return
+
+    for rem in reminders[user_id]:
+        if rem["job_id"] == job_id:
+            interval = rem.get("repeat_interval", confirmation_interval)
+            new_job_id = str(uuid.uuid4())
+            rem["time"] = datetime.utcnow() + timedelta(minutes=interval)
+            rem["job_id"] = new_job_id
+            scheduler.add_job(
+                send_reminder,
+                trigger='date',
+                run_date=rem["time"],
+                args=[user_id, rem["text"], rem["time"].strftime("%H:%M"), new_job_id],
+                id=new_job_id
+            )
+            save_reminders()
+            bot.send_message(message.chat.id, f"🔁 Перенесено на {interval} минут: {rem['text']}")
             break
 
     confirmation_pending.pop(user_id, None)
@@ -873,6 +873,21 @@ def handle_confirmation_text(message):
 if __name__ == "__main__":
     load_reminders()
     restore_jobs()
+
+        bot.set_my_commands([
+        BotCommand("start", "Главное меню"),
+        BotCommand("help", "Отправить инструкцию"),
+        BotCommand("set_confirmation_interval", "Установить интервал для подтверждения"),
+        BotCommand("list_reminders", "Показать список напоминаний"),
+        BotCommand("interval", "Показать текущий интервал подтверждения"),
+        BotCommand("devmode", "Режим разработчика"),
+        # Закомментированные команды не будут отображаться:
+        # BotCommand("add_reminder", "Добавить одноразовое напоминание"),
+        # BotCommand("set_repeating_reminder", "Добавить повторяющееся напоминание"),
+        # BotCommand("manage_reminder", "Управлять напоминаниями"),
+        # BotCommand("delete_reminder", "Удалить напоминание"),
+        # BotCommand("ping", "Проверка работоспособности бота")
+    ])
 
     ping_thread = threading.Thread(target=self_ping)
     ping_thread.daemon = True
