@@ -575,11 +575,6 @@ def process_reminder(message):
                 reminder_datetime_moscow += timedelta(days=1)
 
         reminder_datetime = reminder_datetime_moscow.astimezone(utc)
-
-        global job_counter
-        global id_counter
-        reminder_id = str(id_counter)
-        id_counter += 1
         
         job_id = str(uuid.uuid4())  # это для планировщика, можно оставить
 
@@ -795,9 +790,6 @@ def send_reminder(user_id, event, time, job_id):
             if rem.get("needs_confirmation"):
                 interval = rem.get("repeat_interval", confirmation_interval)
                 global job_counter
-                global id_counter
-                reminder_id = str(id_counter)
-                id_counter += 1
                 
                 job_id = str(uuid.uuid4())  # это для планировщика, можно оставить
 
