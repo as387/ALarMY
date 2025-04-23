@@ -275,6 +275,8 @@ def handle_done_command(message):
     user_id = message.from_user.id
     ensure_user_exists(user_id)
 
+    print("Текущие напоминания у пользователя:", [str(r["job_id"]) for r in reminders.get(user_id, [])])
+
     job_id = message.text.replace("/done_", "").strip()
 
     for rem in reminders.get(user_id, []):
@@ -297,6 +299,8 @@ def handle_skip_command(message):
 
     job_id = message.text.replace("/skip_", "").strip()
 
+    print("Текущие напоминания у пользователя:", [str(r["job_id"]) for r in reminders.get(user_id, [])])
+    
     for rem in reminders.get(user_id, []):
         if str(rem["job_id"]) == job_id:
             interval = rem.get("repeat_interval", confirmation_interval)
