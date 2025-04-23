@@ -1,5 +1,18 @@
+# === ОГЛАВЛЕНИЕ ===
+# 1. Импорты и настройки — строка 13
+# 2. Блок общих команд — строка 239
+# 3. Блок обработчиков текста — строка ?
+# 4. Блок функций для напоминаний — строка 342
+# 5. Блок служебных функций — строка 191
+# 6. Блок Webhook и self-ping — строка 701
+# 7. Главный блок запуска — строка 822
+
+# 7. Главный блок запуска
+
+
 from flask import Flask, request
 import telebot
+# === 1. Импорты и настройки ===
 import os
 from datetime import datetime, timedelta
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -177,6 +190,7 @@ def restore_jobs():
                     )
 
 
+# === 5. Блок служебных функций ===
 def ensure_user_exists(user_id):
     if user_id not in reminders:
         reminders[user_id] = []
@@ -224,6 +238,7 @@ def save_user_info(user):
         with open("users.json", "w", encoding="utf-8") as f:
             json.dump(users, f, ensure_ascii=False, indent=2)
 
+# === 2. Блок общих команд ===
 @bot.message_handler(commands=['start'])
 def start_command(message):
     user_id = message.from_user.id
@@ -326,6 +341,7 @@ def dump_reminders(message):
         bot.send_message(message.chat.id, "Файл reminders.json не найден.")
 
 @bot.message_handler(func=lambda message: message.text == "Добавить напоминание")
+# === 4. Блок функций для напоминаний ===
 def add_reminder(message):
     bot.send_message(message.chat.id, "Введите напоминание в формате ЧЧ.ММ *событие* или ДД.ММ ЧЧ.ММ *событие*.", 	reply_markup=back_to_menu_keyboard())
     bot.clear_step_handler_by_chat_id(message.chat.id)
@@ -341,7 +357,25 @@ def process_reminder(message):
 
     try:
         # Обработка формата даты/времени
-        ...
+        full_match = re.match(r'^(\d{1,2})\.(\d{1,2}) (\d{1,2})\.(\d{2}) (.+)', message.text)
+        if full_match:
+            day, month, hour, minute, event = full_match.groups()
+            reminder_datetime_moscow = moscow.localize(datetime(
+                year=now.year, month=int(month), day=int(day),
+                hour=int(hour), minute=int(minute)
+            ))
+        else:
+            time_match = re.match(r'^(\d{1,2})\.(\d{2}) (.+)', message.text)
+            if not time_match:
+                raise ValueError
+            hour, minute, event = time_match.groups()
+            reminder_datetime_moscow = moscow.localize(datetime.combine(
+                now.date(), datetime.strptime(f"{hour}.{minute}", "%H.%M").time()
+            ))
+            if reminder_datetime_moscow < now:
+                reminder_datetime_moscow += timedelta(days=1)
+        reminder_datetime = reminder_datetime_moscow.astimezone(utc)
+        job_id = str(uuid.uuid4())
 
         # Сохраняем напоминание
         reminders[user_id].append({
@@ -684,6 +718,7 @@ def send_reminder(user_id, event, time, job_id):
                 reminders[user_id] = [r for r in reminders[user_id] if r["job_id"] != job_id]
                 save_reminders()
 
+# === 6. Блок Webhook и self-ping ===
 @app.route("/", methods=["POST"])
 def telegram_webhook():
     if request.headers.get("content-type") == "application/json":
@@ -804,6 +839,7 @@ def handle_confirmation(call):
             return
 
     
+# === 7. Главный блок запуска ===
 if __name__ == "__main__":
     load_reminders()
     restore_jobs()
