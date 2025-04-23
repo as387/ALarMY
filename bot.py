@@ -26,10 +26,7 @@ from telebot.types import ReplyKeyboardMarkup, KeyboardButton
 
 menu_keyboard = ReplyKeyboardMarkup(resize_keyboard=True)
 menu_keyboard.add(
-    KeyboardButton("🆕 Добавить"),
-    KeyboardButton("🔁 Повтор")
 menu_keyboard.add(
-    KeyboardButton("📋 Напоминания")
 
 
 temp_repeating = {}
@@ -140,7 +137,6 @@ def list_reminders(message):
 
 def back_to_menu_keyboard():
     keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    keyboard.add(types.KeyboardButton("↩️ Назад в меню"))
 
 import json
 
@@ -429,8 +425,6 @@ def show_reminders(message):
         text += line + "\n"
 
     keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    keyboard.add(types.KeyboardButton("🗑 Удалить"), types.KeyboardButton("✅"))
-    keyboard.add(types.KeyboardButton("↩️ Назад в меню"))
 
     bot.send_message(message.chat.id, text, reply_markup=keyboard)
 
@@ -539,7 +533,6 @@ def ask_repeat_interval(message):
 
         # Предлагаем выбор интервала
         keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
-        keyboard.add(types.KeyboardButton("Каждый день"), types.KeyboardButton("Каждую неделю"))
         bot.send_message(message.chat.id, "Как часто повторять?", reply_markup=keyboard)
         bot.clear_step_handler_by_chat_id(message.chat.id)
         bot.register_next_step_handler(message, process_repeating_interval)
@@ -659,11 +652,9 @@ def send_reminder(user_id, event, time, job_id):
                 text_suffix = "\n\nНажмите, если выполнили:"
         
         reply_kb = ReplyKeyboardMarkup(resize_keyboard=True)
-        reply_kb.add(KeyboardButton("✅"), KeyboardButton("❌"))
             user_id,
             f"🔔 Напоминание: {event} (в {reminder_time_msk} по МСК){text_suffix}",
         reply_kb = ReplyKeyboardMarkup(resize_keyboard=True)
-        reply_kb.add(KeyboardButton("✅"))
         bot.send_message(
             user_id,
             f"🔔 Напоминание: {event} (в {reminder_time_msk} по МСК){text_suffix}",
