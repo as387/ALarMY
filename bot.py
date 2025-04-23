@@ -585,8 +585,12 @@ def process_reminder(message):
         reminders[user_id].append({
             "id": reminder_id,
             "job_id": job_id,
-            ...
+            "time": reminder_datetime,
+            "text": event,
+            "is_repeating": False,
+            "needs_confirmation": False
         })
+
 
         scheduler.add_job(
             send_reminder,
@@ -705,7 +709,10 @@ def process_repeating_interval(message):
         reminders[user_id].append({
             "id": reminder_id,
             "job_id": job_id,
-            ...
+            "time": reminder_datetime,
+            "text": event,
+            "is_repeating": False,
+            "needs_confirmation": False
         })
 
         if interval == "день":
