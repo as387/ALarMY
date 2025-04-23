@@ -34,6 +34,7 @@ menu_keyboard.add(
 )
 
 confirmation_pending = {}
+id_counter = 1  # глобальный счётчик напоминаний
 job_counter = 1
 temp_repeating = {}
 
@@ -275,14 +276,12 @@ def handle_done_command(message):
     user_id = message.from_user.id
     ensure_user_exists(user_id)
 
-    print("Текущие напоминания у пользователя:", [str(r["job_id"]) for r in reminders.get(user_id, [])])
-
     job_id = message.text.replace("/done_", "").strip()
 
     for rem in reminders.get(user_id, []):
-        if str(rem["job_id"]) == job_id:
+        if str(rem["id"]) == job_id:
             try:
-                scheduler.remove_job(job_id)
+                scheduler.remove_job(rem["job_id"])
             except:
                 pass
             reminders[user_id].remove(rem)
@@ -292,6 +291,7 @@ def handle_done_command(message):
 
     bot.send_message(message.chat.id, "Напоминание не найдено или уже подтверждено.", reply_markup=menu_keyboard)
 
+
 @bot.message_handler(regexp=r"^/skip_[\w\-]+$")
 def handle_skip_command(message):
     user_id = message.from_user.id
@@ -299,17 +299,14 @@ def handle_skip_command(message):
 
     job_id = message.text.replace("/skip_", "").strip()
 
-    print("Текущие напоминания у пользователя:", [str(r["job_id"]) for r in reminders.get(user_id, [])])
-    
     for rem in reminders.get(user_id, []):
-        if str(rem["job_id"]) == job_id:
+        if str(rem["id"]) == job_id:
             interval = rem.get("repeat_interval", confirmation_interval)
-            global job_counter
-            new_job_id = str(job_counter)
-            job_counter += 1
+            new_job_id = str(uuid.uuid4())  # технический ID для планировщика
 
             rem["time"] = datetime.utcnow() + timedelta(minutes=interval)
             rem["job_id"] = new_job_id
+
             scheduler.add_job(
                 send_reminder,
                 trigger='date',
@@ -441,19 +438,26 @@ def process_reminder(message):
                 reminder_datetime_moscow += timedelta(days=1)
         reminder_datetime = reminder_datetime_moscow.astimezone(utc)
         global job_counter
-        job_id = str(job_counter)
-        job_counter += 1
+        global id_counter
+        reminder_id = str(id_counter)
+        id_counter += 1
+        
+        job_id = str(uuid.uuid4())  # это для планировщика, можно оставить
 
-
-        # Сохраняем напоминание
+        global id_counter
+        reminder_id = str(id_counter)
+        id_counter += 1
+        
         reminders[user_id].append({
-            "time": reminder_datetime,
-            "text": event,
-            "job_id": job_id,
-            "is_repeating": False,
-            "needs_confirmation": False
+            "id": reminder_id,                # стабильный ID
+            "job_id": job_id,                 # планировочный ID
+            "time": reminder_datetime,       # или first_run_utc
+            "text": event,                   # или event + " (повт. ...)"
+            "is_repeating": False,           # или True
+            "needs_confirmation": False      # или True
         })
         save_reminders()
+
 
         scheduler.add_job(
             send_reminder,
@@ -573,17 +577,21 @@ def process_reminder(message):
         reminder_datetime = reminder_datetime_moscow.astimezone(utc)
 
         global job_counter
-        job_id = str(job_counter)
-        job_counter += 1
+        global id_counter
+        reminder_id = str(id_counter)
+        id_counter += 1
+        
+        job_id = str(uuid.uuid4())  # это для планировщика, можно оставить
 
+        global id_counter
+        reminder_id = str(id_counter)
+        id_counter += 1
+        
         reminders[user_id].append({
-            "time": reminder_datetime,
-            "text": event,
+            "id": reminder_id,
             "job_id": job_id,
-            "is_repeating": False,
-            "needs_confirmation": False
+            ...
         })
-        save_reminders()
 
         scheduler.add_job(
             send_reminder,
@@ -680,8 +688,12 @@ def process_repeating_interval(message):
 
         first_run_utc = first_run.astimezone(utc)
         global job_counter
-        job_id = str(job_counter)
-        job_counter += 1
+        global id_counter
+        reminder_id = str(id_counter)
+        id_counter += 1
+        
+        job_id = str(uuid.uuid4())  # это для планировщика, можно оставить
+
 
 
         if interval == 'день':
@@ -691,15 +703,16 @@ def process_repeating_interval(message):
             scheduler.add_job(send_reminder, 'interval', weeks=1, start_date=first_run_utc,
                               args=[user_id, event, time_str, job_id], id=job_id)
 
-        reminders[user_id].append({
-            "time": first_run_utc,
-            "text": event + f" (повт. {interval})",
-            "job_id": job_id,
-            "is_repeating": True,
-            "needs_confirmation": False
-        })
-        save_reminders()
+        global id_counter
+        reminder_id = str(id_counter)
+        id_counter += 1
         
+        reminders[user_id].append({
+            "id": reminder_id,
+            "job_id": job_id,
+            ...
+        })
+
         if interval == "день":
             form = "каждый день"
         else:
@@ -782,8 +795,12 @@ def send_reminder(user_id, event, time, job_id):
             if rem.get("needs_confirmation"):
                 interval = rem.get("repeat_interval", confirmation_interval)
                 global job_counter
-                new_job_id = str(job_counter)
-                job_counter += 1
+                global id_counter
+                reminder_id = str(id_counter)
+                id_counter += 1
+                
+                job_id = str(uuid.uuid4())  # это для планировщика, можно оставить
+
 
                 scheduler.add_job(
                     send_reminder,
@@ -948,9 +965,16 @@ def handle_skip(message):
     for rem in reminders[user_id]:
         if str(rem["job_id"]) == job_id:
             interval = rem.get("repeat_interval", confirmation_interval)
-            global job_counter
-            new_job_id = str(job_counter)
-            job_counter += 1
+            global id_counter
+            reminder_id = str(id_counter)
+            id_counter += 1
+            
+            new_job_id = str(uuid.uuid4())  # технический ID для планировщика
+            
+            rem["job_id"] = new_job_id        # обновляем планировочный ID
+            rem["id"] = reminder_id           # сохраняем постоянный ID для команд
+
+
 
             rem["time"] = datetime.utcnow() + timedelta(minutes=interval)
             rem["job_id"] = new_job_id
