@@ -274,16 +274,9 @@ def start_command(message):
         BotCommand("restart", "Перезапуск и очистка"),
     ])
 
-    bot.send_message(
-        message.chat.id,
-        "Главное меню:
-Выберите действие:",
-        reply_markup=menu_keyboard
-    )
-
+    bot.send_message(message.chat.id, "ЙОУ я ALarMY, выберите действие:", reply_markup=menu_keyboard)
 
 @bot.message_handler(func=lambda message: message.text == "🆕 Добавить")
-
 def handle_add(message):
     add_reminder(message)  # Вызывает уже существующую функцию
     print("Добавление нажато")  # или logger.info(...)
