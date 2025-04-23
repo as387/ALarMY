@@ -423,7 +423,7 @@ def show_reminders(message):
                 line += f" 🔁 ({interval_text})"
 
         if rem.get("needs_confirmation"):
-            interval = rem.get("repeat_interval", 30)
+            interval = rem.get("repeat_interval", confirmation_interval)
             line += f", 🚨 ({interval})"
 
         text += line + "\n"
@@ -692,7 +692,7 @@ def send_reminder(user_id, event, time, job_id):
                 return  # Повторяющееся само себе продолжит
             if rem.get("needs_confirmation"):
                 # Перезапуск через repeat_interval минут
-                interval = rem.get("repeat_interval", 30)
+                interval = rem.get("repeat_interval", confirmation_interval)
                 new_job_id = str(uuid.uuid4())
                 scheduler.add_job(
                     send_reminder,
@@ -803,8 +803,6 @@ def confirm_done(message):
 
     bot.send_message(message.chat.id, "❌ Напоминание не найдено или уже подтверждено.")
 
-@bot.callback_query_handler(func=lambda call: call.data.startswith("confirm:") or call.data.startswith("skip:"))
-def handle_confirmation(call):
     user_id = call.from_user.id
     ensure_user_exists(user_id)
     action, job_id = call.data.split(":")
