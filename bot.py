@@ -691,7 +691,7 @@ def process_repeating_interval(message):
         
         job_id = str(uuid.uuid4())  # это для планировщика, можно оставить
 
-
+        global id_counter
 
         if interval == 'день':
             scheduler.add_job(send_reminder, 'interval', days=1, start_date=first_run_utc,
@@ -700,7 +700,7 @@ def process_repeating_interval(message):
             scheduler.add_job(send_reminder, 'interval', weeks=1, start_date=first_run_utc,
                               args=[user_id, event, time_str, job_id], id=job_id)
 
-        global id_counter
+        
         reminder_id = str(id_counter)
         id_counter += 1
         
