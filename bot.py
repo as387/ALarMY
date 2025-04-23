@@ -666,13 +666,14 @@ def process_remove_input(message):
 
 def send_reminder(user_id, event, time, job_id):
     logger.info(f"[REMINDER] STARTED for user {user_id} | Event: {event} | Time: {time} | Job ID: {job_id}")
+
     try:
         reminder_time_utc = datetime.utcnow()
         reminder_time_msk = utc.localize(reminder_time_utc).astimezone(moscow).strftime('%H:%M')
 
         keyboard = None
         text_suffix = ""
-        
+
         for rem in reminders.get(user_id, []):
             if rem["job_id"] == job_id and rem.get("needs_confirmation"):
                 confirmation_pending[user_id] = job_id
@@ -688,15 +689,16 @@ def send_reminder(user_id, event, time, job_id):
         )
 
         logger.info(f"[REMINDER] Sent to user {user_id}")
+
     except Exception as e:
         logger.error(f"[REMINDER ERROR] {e}")
 
+    # Обработка повтора
     for rem in reminders.get(user_id, []):
         if rem["job_id"] == job_id:
             if rem.get("is_repeating"):
-                return  # Повторяющееся само себе продолжит
+                return
             if rem.get("needs_confirmation"):
-                # Перезапуск через repeat_interval минут
                 interval = rem.get("repeat_interval", confirmation_interval)
                 new_job_id = str(uuid.uuid4())
                 scheduler.add_job(
