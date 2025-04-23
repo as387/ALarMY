@@ -250,9 +250,9 @@ def save_user_info(user):
     user_id = str(user.id)
     if user_id not in users:
         users[user_id] = {
-            "username": user.username,
-            "first_name": user.first_name,
-            "last_name": user.last_name,
+            "username": getattr(user, "username", ""),
+            "first_name": getattr(user, "first_name", ""),
+            "last_name": getattr(user, "last_name", ""),
             "joined_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         }
         with open("users.json", "w", encoding="utf-8") as f:
@@ -322,7 +322,7 @@ def handle_confirm(message):
 @bot.message_handler(func=lambda message: message.text == "↩️ Назад в меню")
 def back_to_main_menu(message):
     bot.clear_step_handler_by_chat_id(message.chat.id)
-    bot.send_message(message.chat.id, "Главное меню:", reply_markup=menu_keyboard)
+        bot.send_message(message.chat.id, "Главное меню:\nВыберите действие:", reply_markup=menu_keyboard)
 
 ADMIN_ID = 941791842  # замени на свой
 
