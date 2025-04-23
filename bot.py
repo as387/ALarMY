@@ -203,9 +203,11 @@ ADMIN_ID = 941791842  # замени на свой Telegram ID
 def send_help(message):
     # Устанавливаем команды, которые будут отображаться в меню бота
     bot.set_my_commands([
+        BotCommand("start", "Главное меню"),
         BotCommand("help", "Отправить инструкцию"),
         BotCommand("set_confirmation_interval", "Установить интервал для подтверждения"),
         BotCommand("list_reminders", "Показать список напоминаний"),
+        BotCommand("interval", "Показать текущий интервал подтверждения"),
         BotCommand("devmode", "Режим разработчика"),
         # Закомментированные команды не будут отображаться:
         # BotCommand("add_reminder", "Добавить одноразовое напоминание"),
@@ -445,7 +447,7 @@ def show_reminders(message):
                 line += f" 🔁 ({interval_text})"
 
         if rem.get("needs_confirmation"):
-            interval = rem.get("repeat_interval", 30)
+            bot.send_message(user_id, f"🔁 Перенесено на {confirmation_interval} минут: {rem['text']}")
             line += f", 🚨 ({interval})"
 
         text += line + "\n"
@@ -709,7 +711,7 @@ def send_reminder(user_id, event, time, job_id):
                 return  # Повторяющееся само себе продолжит
             if rem.get("needs_confirmation"):
                 # Перезапуск через repeat_interval минут
-                interval = rem.get("repeat_interval", 30)
+                interval = rem.get("repeat_interval", confirmation_interval)
                 new_job_id = str(uuid.uuid4())
                 scheduler.add_job(
                     send_reminder,
@@ -789,7 +791,7 @@ def process_repeat_selection(message):
         save_reminders()
         bot.send_message(
             message.chat.id,
-            "✅ Обновлено! Повтор через 30 мин. (если включено)",
+            f"✅ Обновлено! Повтор через {confirmation_interval} мин. (если включено)",
             reply_markup=menu_keyboard
         )
     except Exception as e:
@@ -821,6 +823,14 @@ def confirm_done(message):
 
     bot.send_message(message.chat.id, "❌ Напоминание не найдено или уже подтверждено.")
 
+@bot.message_handler(commands=['interval'])
+def show_confirmation_interval(message):
+    bot.send_message(
+        message.chat.id,
+        f"⏱ Текущий интервал для подтверждения: {confirmation_interval} минут",
+        reply_markup=menu_keyboard
+    )
+
 @bot.message_handler(func=lambda message: message.text in ["✅ Подтвердить", "🚫 Пропустить"])
 def handle_confirmation_text(message):
     user_id = message.from_user.id
@@ -834,14 +844,13 @@ def handle_confirmation_text(message):
     for rem in reminders[user_id]:
         if rem["job_id"] == job_id:
             if message.text == "✅ Подтвердить":
-                rem["needs_confirmation"] = False
-                rem.pop("repeat_interval", None)
                 try:
                     scheduler.remove_job(job_id)
                 except:
                     pass
+                reminders[user_id].remove(rem)  # Удаляем само напоминание
                 save_reminders()
-                bot.send_message(message.chat.id, f"✅ Напоминание «{rem['text']}» подтверждено и больше не будет повторяться.")
+                bot.send_message(message.chat.id, f"✅ Напоминание «{rem['text']}» подтверждено и удалено.")
             elif message.text == "🚫 Пропустить":
                 interval = rem.get("repeat_interval", confirmation_interval)
                 new_job_id = str(uuid.uuid4())
