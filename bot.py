@@ -34,7 +34,7 @@ menu_keyboard.add(
 )
 
 confirmation_pending = {}
-
+job_counter = 1
 temp_repeating = {}
 
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
@@ -300,7 +300,10 @@ def handle_skip_command(message):
     for rem in reminders.get(user_id, []):
         if rem["job_id"] == job_id:
             interval = rem.get("repeat_interval", confirmation_interval)
-            new_job_id = str(uuid.uuid4())
+            global job_counter
+            new_job_id = str(job_counter)
+            job_counter += 1
+
             rem["time"] = datetime.utcnow() + timedelta(minutes=interval)
             rem["job_id"] = new_job_id
             scheduler.add_job(
@@ -765,7 +768,10 @@ def send_reminder(user_id, event, time, job_id):
                 return
             if rem.get("needs_confirmation"):
                 interval = rem.get("repeat_interval", confirmation_interval)
-                new_job_id = str(uuid.uuid4())
+                global job_counter
+                new_job_id = str(job_counter)
+                job_counter += 1
+
                 scheduler.add_job(
                     send_reminder,
                     trigger='date',
@@ -929,7 +935,10 @@ def handle_skip(message):
     for rem in reminders[user_id]:
         if rem["job_id"] == job_id:
             interval = rem.get("repeat_interval", confirmation_interval)
-            new_job_id = str(uuid.uuid4())
+            global job_counter
+            new_job_id = str(job_counter)
+            job_counter += 1
+
             rem["time"] = datetime.utcnow() + timedelta(minutes=interval)
             rem["job_id"] = new_job_id
             scheduler.add_job(
