@@ -11,6 +11,7 @@
 
 
 from flask import Flask, request
+from bs4 import BeautifulSoup
 import telebot
 # === 1. Импорты и настройки ===
 import os
@@ -23,6 +24,59 @@ from telebot import types
 from telebot.types import ReplyKeyboardMarkup, KeyboardButton
 
 from telebot.types import ReplyKeyboardMarkup, KeyboardButton
+
+class Weather:
+    def __init__(self, period, temperature, feels_like, weather_desc, wind_speed, wind_dir, humidity, pressure):
+        self.period = period
+        self.temperature = temperature
+        self.feels_like = feels_like
+        self.weather_desc = weather_desc
+        self.wind_speed = wind_speed
+        self.wind_dir = wind_dir
+        self.humidity = humidity
+        self.pressure = pressure
+
+        # Флаги для вывода
+        self.period_flag = True
+        self.temperature_flag = True
+        self.feels_like_flag = True
+        self.weather_desc_flag = True
+
+        # Параметры, которые по умолчанию скрыты
+        self.wind_speed_flag = False
+        self.wind_dir_flag = False
+        self.humidity_flag = False
+        self.pressure_flag = False
+
+def parse_yandex_forecast(raw_text):
+    pattern = re.compile(
+        r"(Утром|Днём|Вечером|Ночью)\+(\d+)[°º]([а-яА-Я\s]+?)\+(\d+)[°º](\d+)\s?м/с([А-Яа-я]+)(\d+)%(\d+)"
+    )
+
+    matches = pattern.findall(raw_text)
+    forecast_data = []
+
+    for part in matches:
+        period, temp, desc, feels_like, wind_speed, wind_dir, humidity, pressure = part
+        
+        weather = Weather(
+            period=period,
+            temperature=f"{temp}°",
+            feels_like=f"{feels_like}°",
+            weather_desc=desc.strip(),
+            wind_speed=f"{wind_speed} м/с",
+            wind_dir=wind_dir,
+            humidity=f"{humidity}%",
+            pressure=f"{pressure} мм рт. ст."
+        )
+
+        # Можно гибко управлять флагами
+        # Например, если не нужно показывать "ощущается как":
+        weather.set_flag('feels_like_flag', False)
+
+        forecast_data.append(weather)
+
+    return forecast_data
 
 menu_keyboard = ReplyKeyboardMarkup(resize_keyboard=True)
 menu_keyboard.add(
@@ -42,7 +96,7 @@ weather_keyboard.add(
     KeyboardButton("🔔 Уведомлять о погоде")
 )
 weather_keyboard.add(
-    KeyboardButton("⚙️ Настройки погоды")
+    KeyboardButton("⚙️ Настройки отображения")
 )
 weather_keyboard.add(
     KeyboardButton("↩️ Назад в меню")
@@ -375,8 +429,11 @@ def handle_confirm(message):
 
 @bot.message_handler(func=lambda message: message.text == "↩️ Назад в меню")
 def back_to_main_menu(message):
-    bot.clear_step_handler_by_chat_id(message.chat.id)
-    bot.send_message(message.chat.id, "Главное меню:", reply_markup=menu_keyboard)
+    bot.send_message(
+        message.chat.id,
+        "Главное меню:",
+        reply_markup=get_main_menu_keyboard()
+    )
 
 ADMIN_ID = 941791842  # замени на свой
 
@@ -638,12 +695,48 @@ def handle_weather_menu(message):
 
 @bot.message_handler(func=lambda message: message.text == "🌦 Погода сегодня")
 def handle_today_weather(message):
-    # Здесь будет логика получения текущей погоды
-    bot.send_message(
-        message.chat.id,
-        "Функция 'Погода сегодня' в разработке",
-        reply_markup=weather_keyboard
-    )
+    try:
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+        }
+        
+        url = "https://yandex.ru/pogoda/ru/moscow/details?lang=ru&via=mf#7"
+        response = requests.get(url, headers=headers)
+        soup = BeautifulSoup(response.text, "html.parser")
+        
+        block = soup.find("div", {"data-id": "d_7"})
+        
+        if block:
+            text = block.text
+            data = parse_yandex_forecast(text)
+            
+            response_text = "📅 Прогноз на сегодня в Москве:\n\n"
+            for weather in data:
+                response_text += str(weather) + "\n"
+            
+            # Добавляем кнопку "Обновить погоду"
+            weather_today_keyboard = ReplyKeyboardMarkup(resize_keyboard=True)
+            weather_today_keyboard.add(KeyboardButton("↩️ Назад в меню"))
+            
+            bot.send_message(
+                message.chat.id, 
+                response_text, 
+                reply_markup=weather_today_keyboard
+            )
+        else:
+            bot.send_message(
+                message.chat.id, 
+                "❌ Не удалось получить данные о погоде. Попробуйте позже.", 
+                reply_markup=get_weather_menu_keyboard()
+            )
+    
+    except Exception as e:
+        logger.error(f"[WEATHER ERROR] {e}")
+        bot.send_message(
+            message.chat.id, 
+            "⚠️ Произошла ошибка при получении данных о погоде.", 
+            reply_markup=get_weather_menu_keyboard()
+        )
 
 @bot.message_handler(func=lambda message: message.text == "🔔 Уведомлять о погоде")
 def handle_weather_notifications(message):
@@ -654,21 +747,13 @@ def handle_weather_notifications(message):
         reply_markup=weather_keyboard
     )
 
-@bot.message_handler(func=lambda message: message.text == "⚙️ Настройки погоды")
+@bot.message_handler(func=lambda message: message.text == "⚙️ Настройки отображения")
 def handle_weather_settings(message):
     # Здесь будет логика настроек погоды
     bot.send_message(
         message.chat.id,
         "Функция 'Настройки погоды' в разработке",
         reply_markup=weather_keyboard
-    )
-
-@bot.message_handler(func=lambda message: message.text == "↩️ Назад в меню")
-def back_to_main_menu(message):
-    bot.send_message(
-        message.chat.id,
-        "Главное меню:",
-        reply_markup=menu_keyboard
     )
 
 def ask_repeat_interval(message):
