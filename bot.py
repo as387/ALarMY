@@ -430,6 +430,10 @@ def get_hourly_forecast(city: str) -> dict:
         print(f'Ошибка обработки данных: {e}')
         return {}
 
+
+DEFAULT_NOTIFICATION_TIME = "7.30"  # Время уведомлений по умолчанию
+user_weather_notifications = {}  # Хранит настройки уведомлений: {"user_id": {"enabled": True/False, "time": "7.30"}}
+
 # === 5. Блок служебных функций ===
 def ensure_user_exists(user_id):
     if user_id not in reminders:
@@ -477,6 +481,98 @@ def save_user_info(user):
         }
         with open("users.json", "w", encoding="utf-8") as f:
             json.dump(users, f, ensure_ascii=False, indent=2)
+
+def load_weather_notifications():
+    global user_weather_notifications
+    try:
+        with open('weather_notifications.json', 'r') as f:
+            user_weather_notifications = json.load(f)
+    except FileNotFoundError:
+        user_weather_notifications = {}
+
+def save_weather_notifications():
+    with open('weather_notifications.json', 'w') as f:
+        json.dump(user_weather_notifications, f)
+
+def parse_time_input(time_str):
+    """Парсит введенное время в формате ЧЧ.ММ (MSK) и возвращает часы и минуты"""
+    try:
+        # Заменяем возможные запятые на точки для надежности
+        time_str = time_str.replace(',', '.')
+        hours, minutes = map(int, time_str.split('.'))
+        
+        # Проверяем валидность времени
+        if 0 <= hours <= 23 and 0 <= minutes <= 59:
+            return hours, minutes
+        else:
+            return None
+    except:
+        return None
+
+def schedule_daily_weather(user_id, time_str=DEFAULT_NOTIFICATION_TIME):
+    try:
+        # Удаляем старые задания для этого пользователя
+        for job in scheduler.get_jobs():
+            if job.id == f"weather_{user_id}":
+                job.remove()
+        
+        # Парсим время
+        hours, minutes = parse_time_input(time_str)
+        if hours is None or minutes is None:
+            raise ValueError("Invalid time format")
+        
+        # Создаем новое задание
+        scheduler.add_job(
+            send_daily_weather,
+            trigger='cron',
+            hour=hours,
+            minute=minutes,
+            args=[user_id],
+            id=f"weather_{user_id}",
+            timezone=moscow
+        )
+    except Exception as e:
+        logger.error(f"Error scheduling weather for user {user_id}: {e}")
+
+def send_daily_weather(user_id):
+    try:
+        API_KEY = "71d3d00aad6c943eb72ea5938056106d"
+        city = user_weather_settings.get(str(user_id), {}).get('city', 'Москва')
+        
+        weather_data = get_cached_weather(API_KEY, city)
+        
+        if not weather_data:
+            logger.error(f"Weather data not available for user {user_id}")
+            return
+        
+        current = weather_data['list'][0]
+        current_time = datetime.fromtimestamp(current['dt']).strftime('%H:%M')
+        
+        response = [
+            f"🌤 <b>Ежедневный прогноз погоды в {city}</b>",
+            f"<i>Обновлено: {current_time}</i>",
+            "",
+            f"<b>Сейчас:</b> {current['weather'][0]['description'].capitalize()}",
+            f"🌡 Температура: {round(current['main']['temp'])}°C",
+            f"💨 Ветер: {current['wind']['speed']} м/с",
+            f"💧 Влажность: {current['main']['humidity']}%",
+            "",
+            "<b>Прогноз на сегодня:</b>"
+        ]
+
+        for forecast in weather_data['list'][1:8]:
+            time = datetime.fromtimestamp(forecast['dt']).strftime('%H:%M')
+            temp = round(forecast['main']['temp'])
+            desc = forecast['weather'][0]['description']
+            response.append(f"🕒 {time}: {temp}°C, {desc}")
+
+        bot.send_message(
+            user_id,
+            "\n".join(response),
+            parse_mode='HTML'
+        )
+    except Exception as e:
+        logger.error(f"Error sending daily weather to {user_id}: {e}")
 
 # === 2. Блок общих команд ===
 @bot.message_handler(commands=['start', 'help'])
@@ -934,15 +1030,124 @@ def back_to_weather_menu(message):
         "Меню погоды:",
         reply_markup=get_weather_menu_keyboard()
     )
-
 @bot.message_handler(func=lambda message: message.text == "🔔 Уведомлять о погоде")
 def handle_weather_notifications(message):
-    # Здесь будет логика настройки уведомлений
+    user_id = str(message.from_user.id)
+    
+    # Инициализируем настройки, если их нет
+    if user_id not in user_weather_notifications:
+        user_weather_notifications[user_id] = {
+            "enabled": False,
+            "time": DEFAULT_NOTIFICATION_TIME
+        }
+    
+    status = user_weather_notifications[user_id].get('enabled', False)
+    time = user_weather_notifications[user_id].get('time', DEFAULT_NOTIFICATION_TIME)
+    
+    keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
+    keyboard.add(types.KeyboardButton("/change_weather_status"))
+    keyboard.add(types.KeyboardButton("/change_weather_time"))
+    keyboard.add(types.KeyboardButton("↩️ Назад в меню погоды"))
+    
     bot.send_message(
         message.chat.id,
-        "Функция 'Уведомлять о погоде' в разработке",
-        reply_markup=weather_keyboard
+        f"Текущий статус уведомлений о погоде: {'✅ Включены' if status else '❌ Выключены'}\n"
+        f"Время уведомлений: {time} (MSK)\n\n"
+        "Используйте команды:\n"
+        "/change_weather_status - переключить статус\n"
+        "/change_weather_time - изменить время уведомлений",
+        reply_markup=keyboard
     )
+
+@bot.message_handler(commands=['change_weather_status'])
+def change_weather_status(message):
+    user_id = str(message.from_user.id)
+    
+    if user_id not in user_weather_notifications:
+        user_weather_notifications[user_id] = {
+            "enabled": False,
+            "time": DEFAULT_NOTIFICATION_TIME
+        }
+
+@bot.message_handler(commands=['change_weather_time'])
+def change_weather_time(message):
+    user_id = str(message.from_user.id)
+    
+    if user_id not in user_weather_notifications:
+        user_weather_notifications[user_id] = {
+            "enabled": False,
+            "time": DEFAULT_NOTIFICATION_TIME
+        }
+    
+    bot.send_message(
+        message.chat.id,
+        f"Текущее время уведомлений: {user_weather_notifications[user_id]['time']} (MSK)\n"
+        "Введите новое время в формате ЧЧ.ММ (например, 8.00 или 7.30):",
+        reply_markup=back_to_weather_settings_keyboard()
+    )
+    bot.register_next_step_handler(message, process_weather_time_input)
+    
+    # Меняем статус на противоположный
+    new_status = not user_weather_notifications[user_id].get('enabled', False)
+    user_weather_notifications[user_id]['enabled'] = new_status
+    
+    if new_status:
+        time_str = user_weather_notifications[user_id].get('time', DEFAULT_NOTIFICATION_TIME)
+        schedule_daily_weather(int(user_id), time_str)
+        response = "✅ Уведомления о погоде включены"
+    else:
+        # Удаляем задание, если есть
+        for job in scheduler.get_jobs():
+            if job.id == f"weather_{user_id}":
+                job.remove()
+        response = "❌ Уведомления о погоде выключены"
+    
+    save_weather_notifications()
+    bot.send_message(message.chat.id, response, reply_markup=get_weather_menu_keyboard())
+
+
+def process_weather_time_input(message):
+    if message.text == "↩️ Назад в меню погоды":
+        return back_to_weather_menu(message)
+    
+    user_id = str(message.from_user.id)
+    time_input = message.text.strip()
+    
+    # Проверяем, не является ли ввод командой (начинается с /)
+    if time_input.startswith('/'):
+        bot.send_message(
+            message.chat.id,
+            "❌ Пожалуйста, введите время в формате ЧЧ.ММ (например, 7.30 или 8.00)",
+            reply_markup=back_to_weather_settings_keyboard()
+        )
+        bot.register_next_step_handler(message, process_weather_time_input)
+        return
+    
+    parsed_time = parse_time_input(time_input)
+    
+    if parsed_time:
+        hours, minutes = parsed_time
+        # Форматируем время обратно в строку (7.30 вместо 7.3)
+        time_str = f"{hours}.{minutes:02d}"
+        user_weather_notifications[user_id]['time'] = time_str
+        
+        # Если уведомления включены, перепланируем
+        if user_weather_notifications[user_id].get('enabled', False):
+            schedule_daily_weather(int(user_id), time_str)
+        
+        save_weather_notifications()
+        bot.send_message(
+            message.chat.id,
+            f"✅ Время уведомлений изменено на {time_str} (MSK)",
+            reply_markup=get_weather_menu_keyboard()
+        )
+    else:
+        bot.send_message(
+            message.chat.id,
+            "❌ Неверный формат времени. Используйте ЧЧ.ММ (например, 7.30 или 8.00)",
+            reply_markup=back_to_weather_settings_keyboard()
+        )
+        bot.register_next_step_handler(message, process_weather_time_input)
 
 @bot.message_handler(func=lambda message: message.text == "⚙️ Настройки погоды")
 def handle_weather_settings(message):
@@ -1376,7 +1581,14 @@ def handle_skip(message):
 # === 7. Главный блок запуска ===
 if __name__ == "__main__":
     load_reminders()
-    load_weather_settings()  # Добавляем эту строку
+    load_weather_settings()
+    load_weather_notifications()  # Загружаем настройки уведомлений
+    
+    # Восстанавливаем запланированные уведомления
+    for user_id, settings in user_weather_notifications.items():
+        if settings.get('enabled', False):
+            schedule_daily_weather(int(user_id), settings.get('time', DEFAULT_NOTIFICATION_TIME))
+    
     restore_jobs()
 
     bot.set_my_commands([
