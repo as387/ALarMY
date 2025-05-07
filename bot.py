@@ -1078,14 +1078,14 @@ def change_weather_status(message):
     if new_status:
         time_str = user_weather_notifications[user_id]['time']
         schedule_daily_weather(int(user_id), time_str)
-        response = "✅ Уведомления о погоде **включены**"
+        response = "✅ Уведомления о погоде включены"
     else:
         # Если выключены — удаляем задание из планировщика
         job_id = f"weather_{user_id}"
         for job in scheduler.get_jobs():
             if job.id == job_id:
                 job.remove()
-        response = "❌ Уведомления о погоде **выключены**"
+        response = "❌ Уведомления о погоде выключены"
     
     # Сохраняем изменения в файл
     save_weather_notifications()
