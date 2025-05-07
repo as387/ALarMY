@@ -516,12 +516,15 @@ def schedule_daily_weather(user_id, time_str=DEFAULT_NOTIFICATION_TIME):
             if job.id == f"weather_{user_id}":
                 job.remove()
         
-        # Парсим время
+        # Парсим время с проверкой ошибок
         hours, minutes = parse_time_input(time_str)
         if hours is None or minutes is None:
-            raise ValueError("Invalid time format")
+            raise ValueError(f"Неверный формат времени: {time_str}")
         
-        # Создаем новое задание
+        # Добавляем лог
+        logger.info(f"Scheduling weather for user {user_id} at {hours}:{minutes} MSK")
+        
+        # Создаем новое задание с правильным часовым поясом
         scheduler.add_job(
             send_daily_weather,
             trigger='cron',
@@ -529,20 +532,25 @@ def schedule_daily_weather(user_id, time_str=DEFAULT_NOTIFICATION_TIME):
             minute=minutes,
             args=[user_id],
             id=f"weather_{user_id}",
-            timezone=moscow
+            timezone=moscow,
+            replace_existing=True
         )
+        logger.info(f"Job created: {scheduler.get_job(f'weather_{user_id}')")
     except Exception as e:
         logger.error(f"Error scheduling weather for user {user_id}: {e}")
+        raise
 
 def send_daily_weather(user_id):
     try:
+        logger.info(f"Sending daily weather to {user_id}")
         API_KEY = "71d3d00aad6c943eb72ea5938056106d"
         city = user_weather_settings.get(str(user_id), {}).get('city', 'Москва')
         
+        logger.info(f"Requesting weather for {city}")
         weather_data = get_cached_weather(API_KEY, city)
         
         if not weather_data:
-            logger.error(f"Weather data not available for user {user_id}")
+            logger.error(f"No weather data for {city}")
             return
         
         current = weather_data['list'][0]
@@ -571,8 +579,9 @@ def send_daily_weather(user_id):
             "\n".join(response),
             parse_mode='HTML'
         )
+        
     except Exception as e:
-        logger.error(f"Error sending daily weather to {user_id}: {e}")
+        logger.error(f"Error in send_daily_weather: {e}")
 
 # === 2. Блок общих команд ===
 @bot.message_handler(commands=['start', 'help'])
@@ -1096,10 +1105,12 @@ def change_weather_status(message):
         response,
         reply_markup=get_weather_menu_keyboard()
     )
+    
 @bot.message_handler(commands=['change_weather_time'])
 def change_weather_time(message):
     user_id = str(message.from_user.id)
     
+    # Инициализация настроек, если их нет
     if user_id not in user_weather_notifications:
         user_weather_notifications[user_id] = {
             "enabled": False,
@@ -1108,7 +1119,7 @@ def change_weather_time(message):
     
     bot.send_message(
         message.chat.id,
-        f"Текущее время уведомлений: {user_weather_notifications[user_id]['time']} (MSK)\n"
+        f"Текущее время уведомлений: {user_weather_notifications[user_id]['time']}\n"
         "Введите новое время в формате ЧЧ.ММ (например, 8.00 или 7.30):",
         reply_markup=back_to_weather_settings_keyboard()
     )
@@ -1609,12 +1620,22 @@ def handle_skip(message):
 if __name__ == "__main__":
     load_reminders()
     load_weather_settings()
-    load_weather_notifications()  # Загружаем настройки уведомлений
+    load_weather_notifications()
     
-    # Восстанавливаем запланированные уведомления
+    # Логируем загруженные настройки
+    logger.info(f"Loaded weather notifications: {user_weather_notifications}")
+    
+    # Восстанавливаем уведомления
     for user_id, settings in user_weather_notifications.items():
         if settings.get('enabled', False):
-            schedule_daily_weather(int(user_id), settings.get('time', DEFAULT_NOTIFICATION_TIME))
+            try:
+                schedule_daily_weather(int(user_id), settings.get('time', DEFAULT_NOTIFICATION_TIME))
+                logger.info(f"Restored weather notification for user {user_id}")
+            except Exception as e:
+                logger.error(f"Failed to restore notification for {user_id}: {e}")
+    
+    # Логируем задачи планировщика
+    logger.info(f"Scheduled jobs: {scheduler.get_jobs()}")
     
     restore_jobs()
 
