@@ -36,8 +36,11 @@ import json
 user_weather_settings = {}
 
 def save_weather_settings():
-    with open('weather_settings.json', 'w', encoding='utf-8') as f:
-        json.dump(user_weather_settings, f, ensure_ascii=False, indent=2)
+    try:
+        with open('weather_settings.json', 'w', encoding='utf-8') as f:
+            json.dump(user_weather_settings, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        logger.error(f"Error saving weather settings: {e}")
 
 def load_weather_settings():
     global user_weather_settings
@@ -45,6 +48,9 @@ def load_weather_settings():
         with open('weather_settings.json', 'r', encoding='utf-8') as f:
             user_weather_settings = json.load(f)
     except FileNotFoundError:
+        user_weather_settings = {}
+    except Exception as e:
+        logger.error(f"Error loading weather settings: {e}")
         user_weather_settings = {}
 
 def back_to_weather_settings_keyboard():
@@ -183,7 +189,7 @@ menu_keyboard.add(
 def get_weather_menu_keyboard():
     keyboard = ReplyKeyboardMarkup(resize_keyboard=True)
     keyboard.row("🌦 Погода сегодня", "🔔 Уведомлять о погоде")
-    keyboard.row("⚙️ Настройки погоды")
+    keyboard.row("⚙️ Настройки погоды")  # Убедитесь, что текст точно совпадает
     keyboard.row("↩️ Назад в меню")
     return keyboard
 
@@ -943,26 +949,34 @@ def handle_weather_notifications(message):
 
 @bot.message_handler(func=lambda message: message.text == "⚙️ Настройки погоды")
 def handle_weather_settings(message):
-    # Проверяем, есть ли сохраненный город для пользователя
-    user_id = message.from_user.id
-    current_city = user_weather_settings.get(user_id, {}).get('city', 'Москва')
-    
+    try:
+        user_id = message.from_user.id
+        current_city = user_weather_settings.get(str(user_id), {}).get('city', 'Москва')
+        
+        # Создаем клавиатуру для настроек
+        keyboard = ReplyKeyboardMarkup(resize_keyboard=True)
+        keyboard.add(KeyboardButton("🏙 Изменить город"))
+        keyboard.add(KeyboardButton("↩️ Назад в меню погоды"))
+        
+        bot.send_message(
+            message.chat.id,
+            f"⚙️ Текущие настройки погоды:\n\n• Город: {current_city}\n\nВыберите действие:",
+            reply_markup=keyboard
+        )
+    except Exception as e:
+        logger.error(f"Error in weather settings: {e}")
+        bot.send_message(
+            message.chat.id,
+            "⚠️ Произошла ошибка при загрузке настроек. Попробуйте позже.",
+            reply_markup=get_weather_menu_keyboard()
+        )
+@bot.message_handler(func=lambda message: message.text == "↩️ Назад в меню погоды")
+def back_to_weather_menu(message):
     bot.send_message(
         message.chat.id,
-        f"Текущие настройки погоды:\n\nГород: {current_city}\n\nВыберите действие:",
-        reply_markup=get_weather_settings_keyboard()
+        "Меню погоды:",
+        reply_markup=get_weather_menu_keyboard()
     )
-
-def process_city_input(message):
-    if message.text == "↩️ Назад в меню погоды":
-        return handle_weather_settings(message)
-    
-    city = message.text.strip()
-    user_id = message.from_user.id
-    
-    # Проверяем, что город существует через API
-    api_key = '71d3d00aad6c943eb72ea5938056106d'
-    test_url = f"https://api.openweathermap.org/data/2.5/weather?q={city}&appid={api_key}"
     
     try:
         response = requests.get(test_url)
