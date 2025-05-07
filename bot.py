@@ -511,31 +511,47 @@ def parse_time_input(time_str):
 
 def schedule_daily_weather(user_id, time_str=DEFAULT_NOTIFICATION_TIME):
     try:
-        # Удаляем старые задания для этого пользователя
+        # Удаляем старые задания
         for job in scheduler.get_jobs():
             if job.id == f"weather_{user_id}":
                 job.remove()
         
-        # Парсим время с проверкой ошибок
+        # Парсим время
         hours, minutes = parse_time_input(time_str)
         if hours is None or minutes is None:
-            raise ValueError(f"Неверный формат времени: {time_str}")
+            raise ValueError("Invalid time format")
         
-        # Добавляем лог
-        logger.info(f"Scheduling weather for user {user_id} at {hours}:{minutes} MSK")
+        # Создаем время в MSK и конвертируем в UTC
+        now = datetime.now(moscow)
+        target_time = moscow.localize(datetime(
+            year=now.year,
+            month=now.month,
+            day=now.day,
+            hour=hours,
+            minute=minutes,
+            second=0
+        ))
         
-        # Создаем новое задание с правильным часовым поясом
+        # Если время уже прошло сегодня, планируем на завтра
+        if target_time < now:
+            target_time += timedelta(days=1)
+        
+        # Конвертируем в UTC для планировщика
+        target_time_utc = target_time.astimezone(utc)
+        
+        logger.info(f"Scheduling for user {user_id} at MSK: {target_time} (UTC: {target_time_utc})")
+        
+        # Создаем cron-задание с учетом часового пояса
         scheduler.add_job(
             send_daily_weather,
             trigger='cron',
-            hour=hours,
-            minute=minutes,
+            hour=target_time.hour,
+            minute=target_time.minute,
             args=[user_id],
             id=f"weather_{user_id}",
-            timezone=moscow,
-            replace_existing=True
+            timezone=moscow  # Указываем московский часовой пояс
         )
-        logger.info(f"Job created: {scheduler.get_job(f'weather_{user_id}')}")
+        
     except Exception as e:
         logger.error(f"Error scheduling weather for user {user_id}: {e}")
         raise
@@ -1149,43 +1165,66 @@ def process_weather_time_input(message):
         return back_to_weather_menu(message)
     
     user_id = str(message.from_user.id)
-    time_input = message.text.strip()
+    time_input = message.text.strip().replace(',', '.')
     
-    # Проверяем, не является ли ввод командой (начинается с /)
-    if time_input.startswith('/'):
-        bot.send_message(
-            message.chat.id,
-            "❌ Пожалуйста, введите время в формате ЧЧ.ММ (например, 7.30 или 8.00)",
-            reply_markup=back_to_weather_settings_keyboard()
-        )
-        bot.register_next_step_handler(message, process_weather_time_input)
-        return
-    
-    parsed_time = parse_time_input(time_input)
-    
-    if parsed_time:
-        hours, minutes = parsed_time
-        # Форматируем время обратно в строку (7.30 вместо 7.3)
+    try:
+        hours, minutes = map(int, time_input.split('.'))
+        if not (0 <= hours < 24 and 0 <= minutes < 60):
+            raise ValueError
+        
         time_str = f"{hours}.{minutes:02d}"
         user_weather_notifications[user_id]['time'] = time_str
         
-        # Если уведомления включены, перепланируем
-        if user_weather_notifications[user_id].get('enabled', False):
+        # Проверка времени
+        now = datetime.now(moscow)
+        target_time = now.replace(hour=hours, minute=minutes, second=0)
+        if target_time < now:
+            target_time += timedelta(days=1)
+        
+        bot.send_message(
+            message.chat.id,
+            f"✅ Уведомления будут приходить в {time_str} MSK\n"
+            f"(Следующее: {target_time.strftime('%d.%m %H:%M')})",
+            reply_markup=get_weather_menu_keyboard()
+        )
+        
+        # Перепланируем, если уведомления включены
+        if user_weather_notifications[user_id]['enabled']:
             schedule_daily_weather(int(user_id), time_str)
         
         save_weather_notifications()
+        
+    except:
         bot.send_message(
             message.chat.id,
-            f"✅ Время уведомлений изменено на {time_str} (MSK)",
-            reply_markup=get_weather_menu_keyboard()
-        )
-    else:
-        bot.send_message(
-            message.chat.id,
-            "❌ Неверный формат времени. Используйте ЧЧ.ММ (например, 7.30 или 8.00)",
+            "❌ Неверный формат времени. Используйте ЧЧ.ММ",
             reply_markup=back_to_weather_settings_keyboard()
         )
         bot.register_next_step_handler(message, process_weather_time_input)
+
+@bot.message_handler(commands=['check_weather_time'])
+def check_weather_time(message):
+    user_id = str(message.from_user.id)
+    if user_id not in user_weather_notifications:
+        bot.send_message(message.chat.id, "У вас нет настроек уведомлений")
+        return
+    
+    settings = user_weather_notifications[user_id]
+    next_run = "не запланировано"
+    
+    for job in scheduler.get_jobs():
+        if job.id == f"weather_{user_id}":
+            next_run = job.next_run_time.astimezone(moscow).strftime('%d.%m %H:%M MSK')
+            break
+    
+    bot.send_message(
+        message.chat.id,
+        f"Текущие настройки:\n"
+        f"• Статус: {'включены' if settings['enabled'] else 'выключены'}\n"
+        f"• Время: {settings['time']} MSK\n"
+        f"• Следующее уведомление: {next_run}",
+        reply_markup=get_weather_menu_keyboard()
+    )
 
 @bot.message_handler(func=lambda message: message.text == "⚙️ Настройки погоды")
 def handle_weather_settings(message):
