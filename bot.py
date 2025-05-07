@@ -26,6 +26,13 @@ from telebot.types import ReplyKeyboardMarkup, KeyboardButton
 
 from telebot.types import ReplyKeyboardMarkup, KeyboardButton
 
+python
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
 class Weather:
     def __init__(self, period, temperature, feels_like, weather_desc, wind_speed, wind_dir, humidity, pressure):
         self.period = period
