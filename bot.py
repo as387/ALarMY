@@ -722,7 +722,7 @@ def handle_today_weather(message):
             "Accept-Language": "ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7"
         }
         
-        url = "https://yandex.ru/pogoda/ru/moscow/details?lang=ru&via=mf#8"
+        url = "https://yandex.ru/pogoda/ru/moscow/details?lang=ru&via=mf#7"
         
         try:
             response = requests.get(url, headers=headers, timeout=10)
