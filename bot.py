@@ -30,6 +30,9 @@ menu_keyboard.add(
     KeyboardButton("🔁 Повтор")
 )
 menu_keyboard.add(
+    KeyboardButton("🌤 Погода")
+)
+menu_keyboard.add(
     KeyboardButton("📋 Напоминания")
 )
 
@@ -612,6 +615,10 @@ def add_repeating_reminder(message):
     bot.send_message(message.chat.id, "Введите время и событие в формате ЧЧ.ММ *событие*.", reply_markup=back_to_menu_keyboard())
     bot.clear_step_handler_by_chat_id(message.chat.id)
     bot.register_next_step_handler(message, ask_repeat_interval)
+
+@bot.message_handler(func=lambda message: message.text == "🌤 Погода")
+def handle_weather(message):
+    bot.send_message(message.chat.id, "Функция погоды в разработке. Скоро здесь будет отображаться текущая погода!", reply_markup=menu_keyboard)
 
 def ask_repeat_interval(message):
 
