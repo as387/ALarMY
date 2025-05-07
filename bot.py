@@ -535,7 +535,7 @@ def schedule_daily_weather(user_id, time_str=DEFAULT_NOTIFICATION_TIME):
             timezone=moscow,
             replace_existing=True
         )
-        logger.info(f"Job created: {scheduler.get_job(f'weather_{user_id}')")
+        logger.info(f"Job created: {scheduler.get_job(f'weather_{user_id}')}")
     except Exception as e:
         logger.error(f"Error scheduling weather for user {user_id}: {e}")
         raise
