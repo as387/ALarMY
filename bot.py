@@ -71,67 +71,26 @@ class Weather:
             pressure=f"{data['pressure']} гПа"
         )
         
-def get_weather_forecast(city: str) -> dict:
-    """Получает прогноз погоды на сегодня"""
+def get_weather_forecast(api_key: str, city: str = "Москва") -> dict:
+    """Получает прогноз погоды с обработкой всех ошибок"""
     try:
-        # ВАЖНО: замените 'ваш_api_ключ' на реальный ключ с openweathermap.org
-        api_key = '71d3d00aad6c943eb72ea5938056106d'  # Пример ключа, замените на свой!
-        base_url = 'https://api.openweathermap.org/data/2.5/forecast'
+        url = f"https://api.openweathermap.org/data/2.5/forecast?q={city}&appid={api_key}&units=metric&lang=ru"
         
-        params = {
-            'q': city,
-            'units': 'metric',
-            'lang': 'ru',
-            'appid': api_key,
-            'cnt': 8
-        }
-
-        # Добавляем таймауты и повторные попытки
-        for attempt in range(3):
-            try:
-                response = requests.get(base_url, params=params, timeout=10)
-                
-                # Проверяем статус ответа
-                if response.status_code == 401:
-                    raise ValueError("Неверный API-ключ OpenWeatherMap")
-                response.raise_for_status()
-                
-                data = response.json()
-                
-                # Проверяем, что получили корректные данные
-                if not data.get('list'):
-                    raise ValueError("Некорректный ответ от API")
-                
-                forecast = {}
-                today = datetime.now().date()
-                
-                for item in data['list']:
-                    dt = datetime.fromtimestamp(item['dt'])
-                    if dt.date() != today:
-                        continue
-                        
-                    time_str = dt.strftime('%H:%M')
-                    forecast[time_str] = {
-                        'temp': item['main']['temp'],
-                        'feels_like': item['main']['feels_like'],
-                        'description': item['weather'][0]['description'].capitalize(),
-                        'wind_speed': item['wind']['speed'],
-                        'wind_deg': item['wind'].get('deg', 0),
-                        'humidity': item['main']['humidity'],
-                        'pressure': item['main']['pressure'],
-                        'icon': item['weather'][0]['icon']
-                    }
-                
-                return forecast
-                
-            except requests.exceptions.RequestException as e:
-                logger.warning(f"Попытка {attempt + 1} не удалась: {str(e)}")
-                if attempt == 2:  # Последняя попытка
-                    raise
-                time.sleep(1)  # Ждем перед повторной попыткой
-                
+        response = requests.get(url, timeout=10)
+        response.raise_for_status()
+        data = response.json()
+        
+        # Проверяем структуру ответа
+        if not isinstance(data.get('list'), list):
+            raise ValueError("Некорректный формат данных от API")
+            
+        return data
+        
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Ошибка запроса: {str(e)}")
+        return None
     except Exception as e:
-        logger.error(f"Ошибка при получении погоды: {str(e)}")
+        logger.error(f"Ошибка обработки данных: {str(e)}")
         return None
 
 def parse_yandex_forecast(raw_text):
@@ -869,53 +828,47 @@ def handle_weather_menu(message):
 
 @bot.message_handler(func=lambda message: message.text == "🌦 Погода сегодня")
 def handle_today_weather(message):
+    API_KEY = "71d3d00aad6c943eb72ea5938056106d"
+    
     try:
         bot.send_chat_action(message.chat.id, 'typing')
+        weather_data = get_cached_weather(API_KEY, "Москва")
         
-        # Получаем прогноз с обработкой ошибок
-        forecast = get_weather_forecast("Москва")
-        
-        if forecast is None:
+        if not weather_data:
             raise Exception("Сервис погоды временно недоступен")
             
-        if not forecast:
-            raise Exception("Нет данных о погоде на сегодня")
-            
-        # Формируем сообщение
-        response = "🌤 <b>Прогноз погоды в Москве:</b>\n\n"
-        weather_emojis = {
-            '01': '☀️', '02': '⛅', '03': '☁️', '04': '☁️',
-            '09': '🌧️', '10': '🌦️', '11': '⛈️', '13': '❄️', '50': '🌫️'
-        }
+        current = weather_data['list'][0]
+        forecast = weather_data['list'][1:5]  # Ближайшие 12 часов
         
-        added = 0
-        for time_str in ['09:00', '12:00', '15:00', '18:00', '21:00']:
-            if time_str in forecast:
-                data = forecast[time_str]
-                icon_code = data['icon'][:2]
-                emoji = weather_emojis.get(icon_code, '🌤️')
-                
-                # Направление ветра
-                wind_deg = data.get('wind_deg', 0)
-                directions = ['С', 'СВ', 'В', 'ЮВ', 'Ю', 'ЮЗ', 'З', 'СЗ']
-                wind_dir = directions[round(wind_deg / 45) % 8] if wind_deg is not None else ""
-                
-                response += (
-                    f"{emoji} <b>{time_str}</b>\n"
-                    f"  🌡 {round(data['temp'])}°C (ощущается {round(data['feels_like'])}°C)\n"
-                    f"  {data['description']}\n"
-                    f"  💨 Ветер: {data['wind_speed']} м/с {wind_dir}\n"
-                    f"  💧 Влажность: {data['humidity']}%\n"
-                    f"  🧭 Давление: {data['pressure']} гПа\n\n"
-                )
-                added += 1
+        # Форматируем данные
+        wind_dir = get_wind_direction(current['wind'].get('deg'))
+        icon = get_weather_icon(current['weather'][0]['icon'])
         
-        if added == 0:
-            raise Exception("Нет данных для отображения")
-            
+        response = [
+            f"{icon} <b>Погода в {weather_data['city']['name']}</b>",
+            f"<i>Обновлено: {datetime.now().strftime('%d.%m %H:%M')}</i>",
+            "",
+            f"<b>Сейчас:</b> {current['weather'][0]['description'].capitalize()}",
+            f"🌡 Температура: {round(current['main']['temp'])}°C",
+            f"🌀 Ощущается как: {round(current['main']['feels_like'])}°C",
+            f"🌬 Ветер: {current['wind']['speed']} м/с {wind_dir}",
+            f"💧 Влажность: {current['main']['humidity']}%",
+            f"🧭 Давление: {current['main']['pressure']} гПа",
+            "",
+            "<b>Прогноз на 12 часов:</b>"
+        ]
+        
+        for item in forecast:
+            time = datetime.fromtimestamp(item['dt']).strftime('%H:%M')
+            response.append(
+                f"\n🕒 {time}: {round(item['main']['temp'])}°C, "
+                f"{item['weather'][0]['description']} "
+                f"{get_weather_icon(item['weather'][0]['icon'])}"
+            )
+        
         bot.send_message(
             message.chat.id,
-            response,
+            "\n".join(response),
             parse_mode='HTML',
             reply_markup=get_weather_menu_keyboard()
         )
@@ -924,10 +877,10 @@ def handle_today_weather(message):
         logger.error(f"[WEATHER ERROR] {str(e)}")
         bot.send_message(
             message.chat.id,
-            "⚠️ Не удалось получить данные о погоде. Пожалуйста, попробуйте позже.",
+            "⚠️ Не удалось получить данные о погоде. Попробуйте через несколько минут.",
             reply_markup=get_weather_menu_keyboard()
         )
-        
+
 @bot.message_handler(func=lambda message: message.text == "🔄 Обновить погоду")
 def handle_refresh_weather(message):
     handle_today_weather(message)  # Просто вызываем тот же обработчик
