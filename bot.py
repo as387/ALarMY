@@ -26,6 +26,23 @@ from telebot.types import ReplyKeyboardMarkup, KeyboardButton
 
 from telebot.types import ReplyKeyboardMarkup, KeyboardButton
 
+from functools import lru_cache
+import requests
+from datetime import datetime
+
+# Кэшируем запросы на 10 минут (600 секунд)
+@lru_cache(maxsize=10)
+def get_cached_weather(api_key: str, city: str):
+    """Получает и кэширует данные о погоде"""
+    try:
+        url = f"https://api.openweathermap.org/data/2.5/forecast?q={city}&appid={api_key}&units=metric&lang=ru"
+        response = requests.get(url, timeout=10)
+        response.raise_for_status()
+        return response.json()
+    except Exception as e:
+        logger.error(f"Ошибка при запросе погоды: {str(e)}")
+        return None
+
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
@@ -828,51 +845,48 @@ def handle_weather_menu(message):
 
 @bot.message_handler(func=lambda message: message.text == "🌦 Погода сегодня")
 def handle_today_weather(message):
-    API_KEY = "71d3d00aad6c943eb72ea5938056106d"
+    API_KEY = "71d3d00aad6c943eb72ea5938056106d"  # Ваш API-ключ
     
     try:
         bot.send_chat_action(message.chat.id, 'typing')
+        
+        # Получаем данные с кэшированием
         weather_data = get_cached_weather(API_KEY, "Москва")
         
         if not weather_data:
             raise Exception("Сервис погоды временно недоступен")
-            
+
+        # Текущая погода
         current = weather_data['list'][0]
-        forecast = weather_data['list'][1:5]  # Ближайшие 12 часов
+        current_time = datetime.fromtimestamp(current['dt']).strftime('%H:%M')
         
-        # Форматируем данные
-        wind_dir = get_wind_direction(current['wind'].get('deg'))
-        icon = get_weather_icon(current['weather'][0]['icon'])
-        
+        # Формируем ответ
         response = [
-            f"{icon} <b>Погода в {weather_data['city']['name']}</b>",
-            f"<i>Обновлено: {datetime.now().strftime('%d.%m %H:%M')}</i>",
+            f"🌤 <b>Погода в Москве</b>",
+            f"<i>Обновлено: {current_time}</i>",
             "",
             f"<b>Сейчас:</b> {current['weather'][0]['description'].capitalize()}",
             f"🌡 Температура: {round(current['main']['temp'])}°C",
-            f"🌀 Ощущается как: {round(current['main']['feels_like'])}°C",
-            f"🌬 Ветер: {current['wind']['speed']} м/с {wind_dir}",
+            f"💨 Ветер: {current['wind']['speed']} м/с",
             f"💧 Влажность: {current['main']['humidity']}%",
-            f"🧭 Давление: {current['main']['pressure']} гПа",
             "",
-            "<b>Прогноз на 12 часов:</b>"
+            "<b>Прогноз на сегодня:</b>"
         ]
-        
-        for item in forecast:
-            time = datetime.fromtimestamp(item['dt']).strftime('%H:%M')
-            response.append(
-                f"\n🕒 {time}: {round(item['main']['temp'])}°C, "
-                f"{item['weather'][0]['description']} "
-                f"{get_weather_icon(item['weather'][0]['icon'])}"
-            )
-        
+
+        # Добавляем прогноз по часам
+        for forecast in weather_data['list'][1:8]:  # Следующие 21 час (3 часа * 7)
+            time = datetime.fromtimestamp(forecast['dt']).strftime('%H:%M')
+            temp = round(forecast['main']['temp'])
+            desc = forecast['weather'][0]['description']
+            response.append(f"🕒 {time}: {temp}°C, {desc}")
+
         bot.send_message(
             message.chat.id,
             "\n".join(response),
             parse_mode='HTML',
             reply_markup=get_weather_menu_keyboard()
         )
-        
+
     except Exception as e:
         logger.error(f"[WEATHER ERROR] {str(e)}")
         bot.send_message(
