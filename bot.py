@@ -1063,12 +1063,39 @@ def handle_weather_notifications(message):
 def change_weather_status(message):
     user_id = str(message.from_user.id)
     
+    # Если у пользователя ещё нет настроек, создаём их
     if user_id not in user_weather_notifications:
         user_weather_notifications[user_id] = {
             "enabled": False,
-            "time": DEFAULT_NOTIFICATION_TIME
+            "time": DEFAULT_NOTIFICATION_TIME  # "7.30" по умолчанию
         }
-
+    
+    # Меняем статус на противоположный
+    new_status = not user_weather_notifications[user_id]['enabled']
+    user_weather_notifications[user_id]['enabled'] = new_status
+    
+    # Если уведомления включены — запускаем ежедневную рассылку
+    if new_status:
+        time_str = user_weather_notifications[user_id]['time']
+        schedule_daily_weather(int(user_id), time_str)
+        response = "✅ Уведомления о погоде **включены**"
+    else:
+        # Если выключены — удаляем задание из планировщика
+        job_id = f"weather_{user_id}"
+        for job in scheduler.get_jobs():
+            if job.id == job_id:
+                job.remove()
+        response = "❌ Уведомления о погоде **выключены**"
+    
+    # Сохраняем изменения в файл
+    save_weather_notifications()
+    
+    # Отправляем ответ пользователю
+    bot.send_message(
+        message.chat.id,
+        response,
+        reply_markup=get_weather_menu_keyboard()
+    )
 @bot.message_handler(commands=['change_weather_time'])
 def change_weather_time(message):
     user_id = str(message.from_user.id)
