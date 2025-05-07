@@ -714,10 +714,9 @@ def handle_weather_menu(message):
 @bot.message_handler(func=lambda message: message.text == "🌦 Погода сегодня")
 def handle_today_weather(message):
     try:
-        # Показываем "печатает..." статус
         bot.send_chat_action(message.chat.id, 'typing')
         
-        # Улучшенные заголовки для запроса
+        # Улучшенные заголовки
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
             "Accept-Language": "ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7"
@@ -728,6 +727,11 @@ def handle_today_weather(message):
         try:
             response = requests.get(url, headers=headers, timeout=10)
             response.raise_for_status()
+            
+            # Проверяем, что получили HTML, а не капчу
+            if "captcha" in response.text.lower():
+                raise Exception("Обнаружена капча")
+                
         except Exception as e:
             logger.error(f"[WEATHER REQUEST ERROR] {e}")
             return bot.send_message(
@@ -738,20 +742,30 @@ def handle_today_weather(message):
         
         soup = BeautifulSoup(response.text, 'html.parser')
         
-        # Ищем блок с погодой
+        # Новый способ поиска блока с погодой
         block = soup.find('div', class_='card') or soup.find('div', {'data-id': 'd_7'})
         
         if not block:
+            logger.error("Не найден блок с погодой на странице")
             return bot.send_message(
                 message.chat.id,
-                "❌ Не удалось найти данные о погоде на странице.",
+                "❌ Сервис погоды временно недоступен. Попробуйте позже.",
                 reply_markup=get_weather_menu_keyboard()
             )
         
-        # Парсим данные
-        weather_data = parse_yandex_forecast(block.get_text())
+        # Альтернативный парсинг
+        forecast_text = block.get_text(separator='\n', strip=True)
+        logger.debug(f"Полученный текст прогноза: {forecast_text[:200]}...")  # Логируем часть текста для отладки
         
-        if not weather_data:
+        # Улучшенное регулярное выражение
+        pattern = re.compile(
+            r"(Утром|Днём|Вечером|Ночью)[,+]\s*(\d+)[°º]\s*([а-яА-ЯёЁ\s-]+?)\s*[,+]\s*(\d+)[°º]\s*(\d+)\s?м/с\s*([А-Яа-яёЁ]+)\s*(\d+)%\s*(\d+)"
+        )
+        
+        matches = pattern.findall(forecast_text)
+        
+        if not matches:
+            logger.error("Не удалось распарсить данные прогноза")
             return bot.send_message(
                 message.chat.id,
                 "⚠️ Не удалось разобрать данные о погоде. Сервис может быть изменен.",
@@ -760,27 +774,31 @@ def handle_today_weather(message):
         
         # Формируем ответ
         response_text = "🌤 <b>Прогноз погоды в Москве:</b>\n\n"
-        for weather in weather_data:
-            response_text += str(weather) + "\n"
-        
-        # Создаем клавиатуру для управления погодой
-        weather_keyboard = ReplyKeyboardMarkup(resize_keyboard=True)
-        weather_keyboard.row("🔄 Обновить погоду")
-        weather_keyboard.row("⚙️ Настройки отображения")
-        weather_keyboard.row("↩️ Назад")
+        for part in matches:
+            period, temp, desc, feels_like, wind_speed, wind_dir, humidity, pressure = part
+            
+            response_text += (
+                f"🌅 <b>{period}:</b>\n"
+                f"  🌡️ Температура: {temp}°C\n"
+                f"  🌥️ Ощущается как: {feels_like}°C\n"
+                f"  ☁️ Погода: {desc.strip()}\n"
+                f"  💨 Ветер: {wind_speed} м/с ({wind_dir})\n"
+                f"  💧 Влажность: {humidity}%\n"
+                f"  🧭 Давление: {pressure} мм рт. ст.\n\n"
+            )
         
         bot.send_message(
             message.chat.id,
             response_text,
-            reply_markup=weather_keyboard,
+            reply_markup=get_weather_menu_keyboard(),
             parse_mode='HTML'
         )
         
     except Exception as e:
-        logger.error(f"[WEATHER PROCESSING ERROR] {e}")
+        logger.error(f"[WEATHER PROCESSING ERROR] {str(e)}", exc_info=True)
         bot.send_message(
             message.chat.id,
-            "⚠️ Произошла ошибка при обработке данных о погоде.",
+            "⚠️ Произошла ошибка при обработке данных о погоде. Разработчик уже уведомлен.",
             reply_markup=get_weather_menu_keyboard()
         )
 
