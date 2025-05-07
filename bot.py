@@ -75,7 +75,7 @@ def get_weather_forecast(city: str) -> dict:
     """Получает прогноз погоды на сегодня"""
     try:
         # ВАЖНО: замените 'ваш_api_ключ' на реальный ключ с openweathermap.org
-        api_key = '2983a94f1b40cfdab70899b7bab55f90'  # Пример ключа, замените на свой!
+        api_key = '71d3d00aad6c943eb72ea5938056106d'  # Пример ключа, замените на свой!
         base_url = 'https://api.openweathermap.org/data/2.5/forecast'
         
         params = {
@@ -353,7 +353,7 @@ def get_hourly_forecast(city: str) -> dict:
     :param city: Название города
     :return: Словарь с прогнозами {время: данные}
     """
-    api_key = '2983a94f1b40cfdab70899b7bab55f90'  # Ваш API-ключ
+    api_key = '71d3d00aad6c943eb72ea5938056106d'  # Ваш API-ключ
     base_url = 'https://api.openweathermap.org/data/2.5/forecast'
     
     params = {
