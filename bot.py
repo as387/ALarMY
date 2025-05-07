@@ -224,6 +224,13 @@ def back_to_menu_keyboard():
 
 import json
 
+def get_main_menu_keyboard():
+    keyboard = ReplyKeyboardMarkup(resize_keyboard=True)
+    keyboard.row("🆕 Добавить", "🔁 Повтор")
+    keyboard.row("🌤 Погода")
+    keyboard.row("📋 Напоминания")
+    return keyboard
+
 def load_reminders():
     global reminders
     try:
@@ -689,11 +696,20 @@ def add_repeating_reminder(message):
 
 @bot.message_handler(func=lambda message: message.text == "🌤 Погода")
 def handle_weather_menu(message):
-    bot.send_message(
-        message.chat.id,
-        "Выберите действие с погодой:",
-        reply_markup=weather_keyboard
-    )
+    try:
+        logger.info(f"Weather menu requested by {message.from_user.id}")
+        bot.send_message(
+            message.chat.id,
+            "Выберите действие с погодой:",
+            reply_markup=get_weather_menu_keyboard()
+        )
+    except Exception as e:
+        logger.error(f"Error in weather menu: {e}")
+        bot.send_message(
+            message.chat.id,
+            "⚠️ Произошла ошибка при обработке запроса.",
+            reply_markup=get_main_menu_keyboard()
+        )
 
 @bot.message_handler(func=lambda message: message.text == "🌦 Погода сегодня")
 def handle_today_weather(message):
