@@ -36,6 +36,18 @@ menu_keyboard.add(
     KeyboardButton("📋 Напоминания")
 )
 
+weather_keyboard = ReplyKeyboardMarkup(resize_keyboard=True)
+weather_keyboard.add(
+    KeyboardButton("🌦 Погода сегодня"),
+    KeyboardButton("🔔 Уведомлять о погоде")
+)
+weather_keyboard.add(
+    KeyboardButton("⚙️ Настройки погоды")
+)
+weather_keyboard.add(
+    KeyboardButton("↩️ Назад в меню")
+)
+
 confirmation_pending = {}
 id_counter = 1  # глобальный счётчик напоминаний
 job_counter = 1
@@ -617,8 +629,47 @@ def add_repeating_reminder(message):
     bot.register_next_step_handler(message, ask_repeat_interval)
 
 @bot.message_handler(func=lambda message: message.text == "🌤 Погода")
-def handle_weather(message):
-    bot.send_message(message.chat.id, "Функция погоды в разработке. Скоро здесь будет отображаться текущая погода!", reply_markup=menu_keyboard)
+def handle_weather_menu(message):
+    bot.send_message(
+        message.chat.id,
+        "Выберите действие с погодой:",
+        reply_markup=weather_keyboard
+    )
+
+@bot.message_handler(func=lambda message: message.text == "🌦 Погода сегодня")
+def handle_today_weather(message):
+    # Здесь будет логика получения текущей погоды
+    bot.send_message(
+        message.chat.id,
+        "Функция 'Погода сегодня' в разработке",
+        reply_markup=weather_keyboard
+    )
+
+@bot.message_handler(func=lambda message: message.text == "🔔 Уведомлять о погоде")
+def handle_weather_notifications(message):
+    # Здесь будет логика настройки уведомлений
+    bot.send_message(
+        message.chat.id,
+        "Функция 'Уведомлять о погоде' в разработке",
+        reply_markup=weather_keyboard
+    )
+
+@bot.message_handler(func=lambda message: message.text == "⚙️ Настройки погоды")
+def handle_weather_settings(message):
+    # Здесь будет логика настроек погоды
+    bot.send_message(
+        message.chat.id,
+        "Функция 'Настройки погоды' в разработке",
+        reply_markup=weather_keyboard
+    )
+
+@bot.message_handler(func=lambda message: message.text == "↩️ Назад в меню")
+def back_to_main_menu(message):
+    bot.send_message(
+        message.chat.id,
+        "Главное меню:",
+        reply_markup=menu_keyboard
+    )
 
 def ask_repeat_interval(message):
 
