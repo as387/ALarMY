@@ -1008,50 +1008,7 @@ def back_to_weather_menu(message):
 
 @bot.message_handler(func=lambda message: message.text == "🏙 Изменить город")
 def handle_change_city(message):
-    try:
-        bot.send_message(
-            message.chat.id,
-            "Введите название города (например, Минск или Minsk):",
-            reply_markup=back_to_weather_settings_keyboard()
-        )
-        bot.register_next_step_handler(message, process_city_input)
-    except Exception as e:
-        logger.error(f"Error in city change handler: {e}")
-        bot.send_message(
-            message.chat.id,
-            "⚠️ Ошибка при запуске смены города. Попробуйте позже.",
-            reply_markup=get_weather_menu_keyboard()
-        )
-
-def process_city_input(message):
-    if message.text == "↩️ Назад в меню погоды":
-        return handle_weather_settings(message)
-    
-    try:
-        city_name = message.text.strip()
-        api_key = 'ваш_ключ'  # Замените на реальный ключ
-        url = f"http://api.openweathermap.org/geo/1.0/direct?q={city_name}&limit=1&appid={api_key}"
-        
-        response = requests.get(url, timeout=10)
-        data = response.json()
-        
-        if not data:
-            raise ValueError("Город не найден")
-            
-        city_info = data[0]
-        bot.send_message(
-            message.chat.id,
-            f"✅ Город изменен на: {city_info['name']}, {city_info.get('country', '')}",
-            reply_markup=get_weather_menu_keyboard()
-        )
-        
-    except Exception as e:
-        logger.error(f"Ошибка при смене города: {str(e)}")
-        bot.send_message(
-            message.chat.id,
-            "⚠️ Не удалось изменить город. Проверьте:\n1. Написание (лучше латиницей)\n2. Попробуйте формат 'Город,КодСтраны'\n3. API может быть недоступно",
-            reply_markup=back_to_weather_settings_keyboard()
-        )
+    print ("Пока что доступна только Москва")
         
 def ask_repeat_interval(message):
 
