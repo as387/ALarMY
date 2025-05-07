@@ -9,6 +9,7 @@
 
 # 7. Главный блок запуска
 
+import requests
 
 from flask import Flask, request
 from bs4 import BeautifulSoup
@@ -90,17 +91,12 @@ menu_keyboard.add(
     KeyboardButton("📋 Напоминания")
 )
 
-weather_keyboard = ReplyKeyboardMarkup(resize_keyboard=True)
-weather_keyboard.add(
-    KeyboardButton("🌦 Погода сегодня"),
-    KeyboardButton("🔔 Уведомлять о погоде")
-)
-weather_keyboard.add(
-    KeyboardButton("⚙️ Настройки отображения")
-)
-weather_keyboard.add(
-    KeyboardButton("↩️ Назад в меню")
-)
+def get_weather_menu_keyboard():
+    keyboard = ReplyKeyboardMarkup(resize_keyboard=True)
+    keyboard.row("🌦 Погода сегодня", "🔔 Уведомлять о погоде")
+    keyboard.row("⚙️ Настройки погоды")
+    keyboard.row("↩️ Назад в меню")
+    return keyboard
 
 confirmation_pending = {}
 id_counter = 1  # глобальный счётчик напоминаний
@@ -696,11 +692,13 @@ def handle_weather_menu(message):
 @bot.message_handler(func=lambda message: message.text == "🌦 Погода сегодня")
 def handle_today_weather(message):
     try:
-        # Показываем пользователю, что бот работает
+        # Показываем "печатает..." статус
         bot.send_chat_action(message.chat.id, 'typing')
         
+        # Улучшенные заголовки для запроса
         headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+            "Accept-Language": "ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7"
         }
         
         url = "https://yandex.ru/pogoda/moscow/details"
@@ -712,59 +710,69 @@ def handle_today_weather(message):
             logger.error(f"[WEATHER REQUEST ERROR] {e}")
             return bot.send_message(
                 message.chat.id,
-                "⚠️ Не удалось подключиться к сервису погоды. Попробуйте позже.",
+                "⚠️ Не удалось получить данные с сервера погоды. Попробуйте позже.",
                 reply_markup=get_weather_menu_keyboard()
             )
         
         soup = BeautifulSoup(response.text, 'html.parser')
         
-        # Более надежный поиск блока с погодой
-        block = soup.find('div', class_='card')
-        if not block:
-            block = soup.find('div', {'data-id': 'd_7'})
+        # Ищем блок с погодой
+        block = soup.find('div', class_='card') or soup.find('div', {'data-id': 'd_7'})
         
-        if block:
-            forecast_text = block.get_text(separator='\n', strip=True)
-            data = parse_yandex_forecast(forecast_text)
-            
-            if not data:
-                return bot.send_message(
-                    message.chat.id,
-                    "⚠️ Не удалось разобрать данные о погоде. Попробуйте позже.",
-                    reply_markup=get_weather_menu_keyboard()
-                )
-            
-            response_text = "🌤 <b>Прогноз погоды в Москве:</b>\n\n"
-            for weather in data:
-                response_text += str(weather) + "\n"
-            
-            response_text += "\n<i>Данные предоставлены Яндекс.Погодой</i>"
-            
-            weather_today_keyboard = ReplyKeyboardMarkup(resize_keyboard=True)
-            weather_today_keyboard.row("🔄 Обновить")
-            weather_today_keyboard.row("⚙️ Настройки отображения")
-            weather_today_keyboard.row("↩️ Назад")
-            
-            bot.send_message(
+        if not block:
+            return bot.send_message(
                 message.chat.id,
-                response_text,
-                reply_markup=weather_today_keyboard,
-                parse_mode='HTML'
-            )
-        else:
-            bot.send_message(
-                message.chat.id,
-                "❌ Сервис погоды временно недоступен. Попробуйте позже.",
+                "❌ Не удалось найти данные о погоде на странице.",
                 reply_markup=get_weather_menu_keyboard()
             )
-    
-    except Exception as e:
-        logger.error(f"[WEATHER ERROR] {e}")
+        
+        # Парсим данные
+        weather_data = parse_yandex_forecast(block.get_text())
+        
+        if not weather_data:
+            return bot.send_message(
+                message.chat.id,
+                "⚠️ Не удалось разобрать данные о погоде. Сервис может быть изменен.",
+                reply_markup=get_weather_menu_keyboard()
+            )
+        
+        # Формируем ответ
+        response_text = "🌤 <b>Прогноз погоды в Москве:</b>\n\n"
+        for weather in weather_data:
+            response_text += str(weather) + "\n"
+        
+        # Создаем клавиатуру для управления погодой
+        weather_keyboard = ReplyKeyboardMarkup(resize_keyboard=True)
+        weather_keyboard.row("🔄 Обновить погоду")
+        weather_keyboard.row("⚙️ Настройки отображения")
+        weather_keyboard.row("↩️ Назад")
+        
         bot.send_message(
             message.chat.id,
-            "⚠️ Произошла непредвиденная ошибка при получении погоды.",
+            response_text,
+            reply_markup=weather_keyboard,
+            parse_mode='HTML'
+        )
+        
+    except Exception as e:
+        logger.error(f"[WEATHER PROCESSING ERROR] {e}")
+        bot.send_message(
+            message.chat.id,
+            "⚠️ Произошла ошибка при обработке данных о погоде.",
             reply_markup=get_weather_menu_keyboard()
         )
+
+@bot.message_handler(func=lambda message: message.text == "🔄 Обновить погоду")
+def handle_refresh_weather(message):
+    handle_today_weather(message)  # Просто вызываем тот же обработчик
+
+@bot.message_handler(func=lambda message: message.text == "↩️ Назад")
+def back_to_weather_menu(message):
+    bot.send_message(
+        message.chat.id,
+        "Меню погоды:",
+        reply_markup=get_weather_menu_keyboard()
+    )
 
 @bot.message_handler(func=lambda message: message.text == "🔔 Уведомлять о погоде")
 def handle_weather_notifications(message):
