@@ -10,7 +10,7 @@
 # 7. Главный блок запуска
 
 import requests
-
+import time
 from flask import Flask, request
 from bs4 import BeautifulSoup
 import telebot
@@ -74,7 +74,8 @@ class Weather:
 def get_weather_forecast(city: str) -> dict:
     """Получает прогноз погоды на сегодня"""
     try:
-        api_key = 'ваш_api_ключ'  # Получите бесплатный ключ на openweathermap.org
+        # ВАЖНО: замените 'ваш_api_ключ' на реальный ключ с openweathermap.org
+        api_key = '2983a94f1b40cfdab70899b7bab55f90'  # Пример ключа, замените на свой!
         base_url = 'https://api.openweathermap.org/data/2.5/forecast'
         
         params = {
@@ -88,13 +89,18 @@ def get_weather_forecast(city: str) -> dict:
         # Добавляем таймауты и повторные попытки
         for attempt in range(3):
             try:
-                response = requests.get(base_url, params=params, timeout=(3.05, 10))
+                response = requests.get(base_url, params=params, timeout=10)
+                
+                # Проверяем статус ответа
+                if response.status_code == 401:
+                    raise ValueError("Неверный API-ключ OpenWeatherMap")
                 response.raise_for_status()
+                
                 data = response.json()
                 
                 # Проверяем, что получили корректные данные
                 if not data.get('list'):
-                    raise ValueError("Invalid API response")
+                    raise ValueError("Некорректный ответ от API")
                 
                 forecast = {}
                 today = datetime.now().date()
@@ -119,13 +125,13 @@ def get_weather_forecast(city: str) -> dict:
                 return forecast
                 
             except requests.exceptions.RequestException as e:
-                logger.warning(f"Attempt {attempt + 1} failed: {str(e)}")
+                logger.warning(f"Попытка {attempt + 1} не удалась: {str(e)}")
                 if attempt == 2:  # Последняя попытка
                     raise
                 time.sleep(1)  # Ждем перед повторной попыткой
                 
     except Exception as e:
-        logger.error(f"Failed to get weather: {str(e)}")
+        logger.error(f"Ошибка при получении погоды: {str(e)}")
         return None
 
 def parse_yandex_forecast(raw_text):
@@ -347,7 +353,7 @@ def get_hourly_forecast(city: str) -> dict:
     :param city: Название города
     :return: Словарь с прогнозами {время: данные}
     """
-    api_key = '79d1ca96933b0328e1c7e3e7a26cb347'  # Ваш API-ключ
+    api_key = '2983a94f1b40cfdab70899b7bab55f90'  # Ваш API-ключ
     base_url = 'https://api.openweathermap.org/data/2.5/forecast'
     
     params = {
@@ -866,44 +872,46 @@ def handle_today_weather(message):
     try:
         bot.send_chat_action(message.chat.id, 'typing')
         
-        # Получаем прогноз
+        # Получаем прогноз с обработкой ошибок
         forecast = get_weather_forecast("Москва")
         
-        if not forecast:
-            raise Exception("Не удалось получить данные о погоде")
+        if forecast is None:
+            raise Exception("Сервис погоды временно недоступен")
             
-        # Формируем красивое сообщение
+        if not forecast:
+            raise Exception("Нет данных о погоде на сегодня")
+            
+        # Формируем сообщение
         response = "🌤 <b>Прогноз погоды в Москве:</b>\n\n"
         weather_emojis = {
             '01': '☀️', '02': '⛅', '03': '☁️', '04': '☁️',
             '09': '🌧️', '10': '🌦️', '11': '⛈️', '13': '❄️', '50': '🌫️'
         }
         
-        # Выбираем ключевые времена дня
-        key_times = ['09:00', '12:00', '15:00', '18:00', '21:00']
-        
-        for time_str in key_times:
-            if time_str not in forecast:
-                continue
+        added = 0
+        for time_str in ['09:00', '12:00', '15:00', '18:00', '21:00']:
+            if time_str in forecast:
+                data = forecast[time_str]
+                icon_code = data['icon'][:2]
+                emoji = weather_emojis.get(icon_code, '🌤️')
                 
-            data = forecast[time_str]
-            icon_code = data['icon'][:2]
-            emoji = weather_emojis.get(icon_code, '🌤️')
-            
-            # Создаем объект Weather для удобного форматирования
-            weather = Weather.from_openweather_data(time_str, data)
-            
-            response += (
-                f"{emoji} <b>{time_str}</b>\n"
-                f"  🌡 {weather.temperature} (ощущается {weather.feels_like})\n"
-                f"  {weather.weather_desc}\n"
-                f"  💨 Ветер: {weather.wind_speed} {weather.wind_dir}\n"
-                f"  💧 Влажность: {weather.humidity}\n"
-                f"  🧭 Давление: {weather.pressure}\n\n"
-            )
+                # Направление ветра
+                wind_deg = data.get('wind_deg', 0)
+                directions = ['С', 'СВ', 'В', 'ЮВ', 'Ю', 'ЮЗ', 'З', 'СЗ']
+                wind_dir = directions[round(wind_deg / 45) % 8] if wind_deg is not None else ""
+                
+                response += (
+                    f"{emoji} <b>{time_str}</b>\n"
+                    f"  🌡 {round(data['temp'])}°C (ощущается {round(data['feels_like'])}°C)\n"
+                    f"  {data['description']}\n"
+                    f"  💨 Ветер: {data['wind_speed']} м/с {wind_dir}\n"
+                    f"  💧 Влажность: {data['humidity']}%\n"
+                    f"  🧭 Давление: {data['pressure']} гПа\n\n"
+                )
+                added += 1
         
-        if len(response) < 30:  # Если данных мало
-            raise Exception("Недостаточно данных о погоде")
+        if added == 0:
+            raise Exception("Нет данных для отображения")
             
         bot.send_message(
             message.chat.id,
@@ -916,7 +924,7 @@ def handle_today_weather(message):
         logger.error(f"[WEATHER ERROR] {str(e)}")
         bot.send_message(
             message.chat.id,
-            "⚠️ Не удалось получить данные о погоде. Попробуйте позже.",
+            "⚠️ Не удалось получить данные о погоде. Пожалуйста, попробуйте позже.",
             reply_markup=get_weather_menu_keyboard()
         )
         
