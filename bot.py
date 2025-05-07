@@ -55,6 +55,19 @@ class Weather:
         self.humidity_flag = False
         self.pressure_flag = False
 
+        @staticmethod
+        def from_openweather_data(time_str, data):
+            return Weather(
+                period=time_str,
+                temperature=f"{round(data['temp'])}°",
+                feels_like=f"{round(data['feels_like'])}°",
+                weather_desc=data['description'],
+                wind_speed=f"{data['wind_speed']} м/с",
+                wind_dir="",  # Направление ветра не предоставляется в базовом API
+                humidity=f"{data['humidity']}%",
+                pressure=f"{data['pressure']} гПа"
+            )
+
 def parse_yandex_forecast(raw_text):
     pattern = re.compile(
         r"(Утром|Днём|Вечером|Ночью)\+(\d+)[°º]([а-яА-Я\s]+?)\+(\d+)[°º](\d+)\s?м/с([А-Яа-я]+)(\d+)%(\d+)"
@@ -268,6 +281,83 @@ def restore_jobs():
                         id=rem["job_id"]
                     )
 
+def get_hourly_forecast(city: str) -> dict:
+    """
+    Получает прогноз погоды на указанные часы (08:00, 13:00, 17:00, 20:00)
+    :param city: Название города
+    :return: Словарь с прогнозами {время: данные}
+    """
+    api_key = '79d1ca96933b0328e1c7e3e7a26cb347'  # Ваш API-ключ
+    base_url = 'https://api.openweathermap.org/data/2.5/forecast'
+    
+    params = {
+        'q': city,
+        'units': 'metric',
+        'lang': 'ru',
+        'appid': api_key,
+        'cnt': 24  # Получаем больше прогнозов для поиска нужных часов
+    }
+
+    try:
+        response = requests.get(base_url, params=params, timeout=10)
+        response.raise_for_status()
+        forecast_data = response.json()
+        
+        target_times = {'08:00', '13:00', '17:00', '20:00'}
+        hourly_forecast = {}
+        today = datetime.now().date()
+        
+        for item in forecast_data['list']:
+            forecast_time = datetime.fromtimestamp(item['dt'])
+            time_str = forecast_time.strftime('%H:%M')
+            
+            # Берем только прогнозы на сегодня и для нужных часов
+            if forecast_time.date() == today and time_str in target_times:
+                hourly_forecast[time_str] = {
+                    'time': time_str,
+                    'temp': round(item['main']['temp']),
+                    'feels_like': round(item['main']['feels_like']),
+                    'description': item['weather'][0]['description'].capitalize(),
+                    'wind_speed': item['wind']['speed'],
+                    'humidity': item['main']['humidity'],
+                    'pressure': item['main']['pressure'],
+                    'icon': item['weather'][0]['icon']
+                }
+        
+        # Если не нашли все нужные часы, берем ближайшие доступные
+        if len(hourly_forecast) < 4:
+            remaining_times = target_times - set(hourly_forecast.keys())
+            if remaining_times:  # Проверяем, что есть времена, которые нужно заполнить
+                for item in forecast_data['list']:
+                    forecast_time = datetime.fromtimestamp(item['dt'])
+                    if forecast_time.date() == today:
+                        time_str = forecast_time.strftime('%H:%M')
+                        if time_str not in hourly_forecast:
+                            closest_time = min(remaining_times,
+                                             key=lambda x: abs(datetime.strptime(x, '%H:%M').hour - forecast_time.hour))
+                            if closest_time not in hourly_forecast:
+                                hourly_forecast[closest_time] = {
+                                    'time': closest_time,
+                                    'temp': round(item['main']['temp']),
+                                    'feels_like': round(item['main']['feels_like']),
+                                    'description': item['weather'][0]['description'].capitalize(),
+                                    'wind_speed': item['wind']['speed'],
+                                    'humidity': item['main']['humidity'],
+                                    'pressure': item['main']['pressure'],
+                                    'icon': item['weather'][0]['icon']
+                                }
+                                remaining_times.remove(closest_time)
+                                if not remaining_times:
+                                    break
+        
+        return hourly_forecast
+    
+    except requests.RequestException as e:
+        print(f'Ошибка при запросе погоды: {e}')
+        return {}
+    except (KeyError, ValueError) as e:
+        print(f'Ошибка обработки данных: {e}')
+        return {}
 
 # === 5. Блок служебных функций ===
 def ensure_user_exists(user_id):
@@ -716,75 +806,31 @@ def handle_today_weather(message):
     try:
         bot.send_chat_action(message.chat.id, 'typing')
         
-        # Улучшенные заголовки
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
-            "Accept-Language": "ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7"
-        }
+        # Получаем прогноз для Москвы
+        forecast = get_hourly_forecast("Москва")
         
-        url = "https://yandex.ru/pogoda/ru/moscow/details?lang=ru&via=mf#7"
-        
-        try:
-            response = requests.get(url, headers=headers, timeout=10)
-            response.raise_for_status()
+        if not forecast:
+            raise Exception("Не удалось получить данные о погоде")
             
-            # Проверяем, что получили HTML, а не капчу
-            if "captcha" in response.text.lower():
-                raise Exception("Обнаружена капча")
-                
-        except Exception as e:
-            logger.error(f"[WEATHER REQUEST ERROR] {e}")
-            return bot.send_message(
-                message.chat.id,
-                "⚠️ Не удалось получить данные с сервера погоды. Попробуйте позже.",
-                reply_markup=get_weather_menu_keyboard()
-            )
-        
-        soup = BeautifulSoup(response.text, 'html.parser')
-        
-        # Новый способ поиска блока с погодой
-        block = soup.find('div', class_='card') or soup.find('div', {'data-id': 'd_7'})
-        
-        if not block:
-            logger.error("Не найден блок с погодой на странице")
-            return bot.send_message(
-                message.chat.id,
-                "❌ Сервис погоды временно недоступен. Попробуйте позже.",
-                reply_markup=get_weather_menu_keyboard()
-            )
-        
-        # Альтернативный парсинг
-        forecast_text = block.get_text(separator='\n', strip=True)
-        logger.debug(f"Полученный текст прогноза: {forecast_text[:200]}...")  # Логируем часть текста для отладки
-        
-        # Улучшенное регулярное выражение
-        pattern = re.compile(
-            r"(Утром|Днём|Вечером|Ночью)[,+]\s*(\d+)[°º]\s*([а-яА-ЯёЁ\s-]+?)\s*[,+]\s*(\d+)[°º]\s*(\d+)\s?м/с\s*([А-Яа-яёЁ]+)\s*(\d+)%\s*(\d+)"
-        )
-        
-        matches = pattern.findall(forecast_text)
-        
-        if not matches:
-            logger.error("Не удалось распарсить данные прогноза")
-            return bot.send_message(
-                message.chat.id,
-                "⚠️ Не удалось разобрать данные о погоде. Сервис может быть изменен.",
-                reply_markup=get_weather_menu_keyboard()
-            )
-        
         # Формируем ответ
         response_text = "🌤 <b>Прогноз погоды в Москве:</b>\n\n"
-        for part in matches:
-            period, temp, desc, feels_like, wind_speed, wind_dir, humidity, pressure = part
+        weather_emojis = {
+            '01': '☀️', '02': '⛅', '03': '☁️', '04': '☁️',
+            '09': '🌧️', '10': '🌦️', '11': '⛈️', '13': '❄️', '50': '🌫️'
+        }
+        
+        for time_str in sorted(forecast.keys()):
+            data = forecast[time_str]
+            icon_code = data['icon'][:2]
+            emoji = weather_emojis.get(icon_code, '🌤️')
             
             response_text += (
-                f"🌅 <b>{period}:</b>\n"
-                f"  🌡️ Температура: {temp}°C\n"
-                f"  🌥️ Ощущается как: {feels_like}°C\n"
-                f"  ☁️ Погода: {desc.strip()}\n"
-                f"  💨 Ветер: {wind_speed} м/с ({wind_dir})\n"
-                f"  💧 Влажность: {humidity}%\n"
-                f"  🧭 Давление: {pressure} мм рт. ст.\n\n"
+                f"🕒 <b>{time_str}:</b> {emoji} {data['description']}\n"
+                f"  🌡️ Температура: {data['temp']}°C\n"
+                f"  🌥️ Ощущается как: {data['feels_like']}°C\n"
+                f"  💨 Ветер: {data['wind_speed']} м/с\n"
+                f"  💧 Влажность: {data['humidity']}%\n"
+                f"  🧭 Давление: {data['pressure']} гПа\n\n"
             )
         
         bot.send_message(
@@ -798,7 +844,7 @@ def handle_today_weather(message):
         logger.error(f"[WEATHER PROCESSING ERROR] {str(e)}", exc_info=True)
         bot.send_message(
             message.chat.id,
-            "⚠️ Произошла ошибка при обработке данных о погоде. Разработчик уже уведомлен.",
+            "⚠️ Не удалось получить данные о погоде. Попробуйте позже.",
             reply_markup=get_weather_menu_keyboard()
         )
 
