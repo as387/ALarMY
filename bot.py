@@ -37,20 +37,17 @@ user_weather_settings = {}
 
 def save_weather_settings():
     try:
-        with open('weather_settings.json', 'w', encoding='utf-8') as f:
-            json.dump(user_weather_settings, f, ensure_ascii=False, indent=2)
+        with open('weather_settings.json', 'w') as f:
+            json.dump(user_weather_settings, f)
     except Exception as e:
         logger.error(f"Error saving weather settings: {e}")
 
 def load_weather_settings():
     global user_weather_settings
     try:
-        with open('weather_settings.json', 'r', encoding='utf-8') as f:
+        with open('weather_settings.json', 'r') as f:
             user_weather_settings = json.load(f)
     except FileNotFoundError:
-        user_weather_settings = {}
-    except Exception as e:
-        logger.error(f"Error loading weather settings: {e}")
         user_weather_settings = {}
 
 def back_to_weather_settings_keyboard():
@@ -1011,13 +1008,67 @@ def back_to_weather_menu(message):
 
 @bot.message_handler(func=lambda message: message.text == "🏙 Изменить город")
 def handle_change_city(message):
-    bot.send_message(
-        message.chat.id,
-        "Введите название города для отображения погоды:",
-        reply_markup=back_to_weather_settings_keyboard()
-    )
-    bot.register_next_step_handler(message, process_city_input)
+    try:
+        bot.send_message(
+            message.chat.id,
+            "Введите название города (например, Минск или Minsk):",
+            reply_markup=back_to_weather_settings_keyboard()
+        )
+        bot.register_next_step_handler(message, process_city_input)
+    except Exception as e:
+        logger.error(f"Error in city change handler: {e}")
+        bot.send_message(
+            message.chat.id,
+            "⚠️ Ошибка при запуске смены города. Попробуйте позже.",
+            reply_markup=get_weather_menu_keyboard()
+        )
 
+def process_city_input(message):
+    if message.text == "↩️ Назад в меню погоды":
+        return handle_weather_settings(message)
+    
+    try:
+        city_name = message.text.strip()
+        user_id = message.from_user.id
+        
+        # Проверяем город через API
+        api_key = 'ваш_api_key'  # Замените на реальный ключ
+        test_url = f"http://api.openweathermap.org/geo/1.0/direct?q={city_name}&limit=1&appid={api_key}"
+        
+        response = requests.get(test_url, timeout=10)
+        if response.status_code == 200:
+            data = response.json()
+            if data and isinstance(data, list):
+                # Сохраняем город для пользователя
+                if str(user_id) not in user_weather_settings:
+                    user_weather_settings[str(user_id)] = {}
+                
+                user_weather_settings[str(user_id)] = {
+                    'city': data[0]['name'],
+                    'lat': data[0]['lat'],
+                    'lon': data[0]['lon'],
+                    'country': data[0].get('country', '')
+                }
+                save_weather_settings()
+                
+                bot.send_message(
+                    message.chat.id,
+                    f"✅ Город изменен на: {data[0]['name']}, {data[0].get('country', '')}",
+                    reply_markup=get_weather_menu_keyboard()
+                )
+            else:
+                raise ValueError("Город не найден")
+        else:
+            raise ConnectionError("Ошибка подключения к API")
+            
+    except Exception as e:
+        logger.error(f"City validation error: {e}")
+        bot.send_message(
+            message.chat.id,
+            "⚠️ Не удалось найти город. Проверьте написание и попробуйте снова.",
+            reply_markup=back_to_weather_settings_keyboard()
+        )
+        bot.register_next_step_handler(message, process_city_input)
 def ask_repeat_interval(message):
 
     if message.text == "↩️ Назад в меню":
