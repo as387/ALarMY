@@ -1159,7 +1159,6 @@ def change_weather_time(message):
     save_weather_notifications()
     bot.send_message(message.chat.id, response, reply_markup=get_weather_menu_keyboard())
 
-
 def process_weather_time_input(message):
     if message.text == "↩️ Назад в меню погоды":
         return back_to_weather_menu(message)
@@ -1168,6 +1167,7 @@ def process_weather_time_input(message):
     time_input = message.text.strip().replace(',', '.')
     
     try:
+        # Парсим время
         hours, minutes = map(int, time_input.split('.'))
         if not (0 <= hours < 24 and 0 <= minutes < 60):
             raise ValueError
@@ -1175,16 +1175,30 @@ def process_weather_time_input(message):
         time_str = f"{hours}.{minutes:02d}"
         user_weather_notifications[user_id]['time'] = time_str
         
-        # Проверка времени
+        # Рассчитываем следующее время
         now = datetime.now(moscow)
-        target_time = now.replace(hour=hours, minute=minutes, second=0)
-        if target_time < now:
-            target_time += timedelta(days=1)
+        today_target = now.replace(hour=hours, minute=minutes, second=0, microsecond=0)
+        
+        # Определяем, будет ли уведомление сегодня или завтра
+        if today_target > now:
+            next_time = today_target
+            when = "сегодня"
+        else:
+            next_time = today_target + timedelta(days=1)
+            when = "завтра"
+        
+        # Форматируем дату для ответа
+        if next_time.date() == now.date():
+            date_str = "сегодня"
+        elif next_time.date() == now.date() + timedelta(days=1):
+            date_str = "завтра"
+        else:
+            date_str = next_time.strftime('%d.%m')
         
         bot.send_message(
             message.chat.id,
             f"✅ Уведомления будут приходить в {time_str} MSK\n"
-            f"(Следующее: {target_time.strftime('%d.%m %H:%M')})",
+            f"(Следующее: {date_str} в {next_time.strftime('%H:%M')})",
             reply_markup=get_weather_menu_keyboard()
         )
         
@@ -1201,7 +1215,6 @@ def process_weather_time_input(message):
             reply_markup=back_to_weather_settings_keyboard()
         )
         bot.register_next_step_handler(message, process_weather_time_input)
-
 @bot.message_handler(commands=['check_weather_time'])
 def check_weather_time(message):
     user_id = str(message.from_user.id)
@@ -1684,6 +1697,7 @@ if __name__ == "__main__":
         BotCommand("set_confirmation_interval", "Установить интервал для подтверждения"),
         BotCommand("list_reminders", "Показать список напоминаний"),
         BotCommand("interval", "Показать текущий интервал подтверждения"),
+        BotCommand("check_weather_time", "Проверить время уведомлений"),
         BotCommand("restart", "Перезапустить бота"),
         BotCommand("devmode", "Режим разработчика"),
         # Закомментированные команды не будут отображаться:
