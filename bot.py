@@ -946,7 +946,11 @@ def handle_weather_notifications(message):
 
 @bot.message_handler(func=lambda message: message.text == "⚙️ Настройки погоды")
 def handle_weather_settings(message):
-    print ("Пока что доступна только Москва 😔😔😔")
+    bot.send_message(
+        message.chat.id,
+        "Пока что доступна только Москва 😔😔😔",
+        reply_markup=get_weather_menu_keyboard()
+    )
     
 @bot.message_handler(func=lambda message: message.text == "↩️ Назад в меню погоды")
 def back_to_weather_menu(message):
