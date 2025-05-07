@@ -946,27 +946,8 @@ def handle_weather_notifications(message):
 
 @bot.message_handler(func=lambda message: message.text == "⚙️ Настройки погоды")
 def handle_weather_settings(message):
-    try:
-        user_id = message.from_user.id
-        current_city = user_weather_settings.get(str(user_id), {}).get('city', 'Москва')
-        
-        # Создаем клавиатуру для настроек
-        keyboard = ReplyKeyboardMarkup(resize_keyboard=True)
-        keyboard.add(KeyboardButton("🏙 Изменить город"))
-        keyboard.add(KeyboardButton("↩️ Назад в меню погоды"))
-        
-        bot.send_message(
-            message.chat.id,
-            f"⚙️ Текущие настройки погоды:\n\n• Город: {current_city}\n\nВыберите действие:",
-            reply_markup=keyboard
-        )
-    except Exception as e:
-        logger.error(f"Error in weather settings: {e}")
-        bot.send_message(
-            message.chat.id,
-            "⚠️ Произошла ошибка при загрузке настроек. Попробуйте позже.",
-            reply_markup=get_weather_menu_keyboard()
-        )
+    print ("Пока что доступна только Москва 😔😔😔")
+    
 @bot.message_handler(func=lambda message: message.text == "↩️ Назад в меню погоды")
 def back_to_weather_menu(message):
     bot.send_message(
@@ -1008,7 +989,7 @@ def back_to_weather_menu(message):
 
 @bot.message_handler(func=lambda message: message.text == "🏙 Изменить город")
 def handle_change_city(message):
-    print ("Пока что доступна только Москва")
+    print ("Пока что доступна только Москва 😔😔😔")
         
 def ask_repeat_interval(message):
 
