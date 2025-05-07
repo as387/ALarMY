@@ -30,6 +30,28 @@ from functools import lru_cache
 import requests
 from datetime import datetime
 
+import json
+
+# Глобальная переменная для хранения настроек погоды
+user_weather_settings = {}
+
+def save_weather_settings():
+    with open('weather_settings.json', 'w', encoding='utf-8') as f:
+        json.dump(user_weather_settings, f, ensure_ascii=False, indent=2)
+
+def load_weather_settings():
+    global user_weather_settings
+    try:
+        with open('weather_settings.json', 'r', encoding='utf-8') as f:
+            user_weather_settings = json.load(f)
+    except FileNotFoundError:
+        user_weather_settings = {}
+
+def back_to_weather_settings_keyboard():
+    keyboard = ReplyKeyboardMarkup(resize_keyboard=True)
+    keyboard.add(KeyboardButton("↩️ Назад в меню погоды"))
+    return keyboard
+
 # Кэшируем запросы на 10 минут (600 секунд)
 @lru_cache(maxsize=10)
 def get_cached_weather(api_key: str, city: str):
@@ -87,7 +109,13 @@ class Weather:
             humidity=f"{data['humidity']}%",
             pressure=f"{data['pressure']} гПа"
         )
-        
+
+def get_weather_settings_keyboard():
+    keyboard = ReplyKeyboardMarkup(resize_keyboard=True)
+    keyboard.row("🏙 Изменить город")
+    keyboard.row("↩️ Назад в меню погоды")
+    return keyboard
+    
 def get_weather_forecast(api_key: str, city: str = "Москва") -> dict:
     """Получает прогноз погоды с обработкой всех ошибок"""
     try:
@@ -277,8 +305,6 @@ def back_to_menu_keyboard():
     keyboard.add(types.KeyboardButton("↩️ Назад в меню"))
     return keyboard
 
-import json
-
 def get_main_menu_keyboard():
     keyboard = ReplyKeyboardMarkup(resize_keyboard=True)
     keyboard.row("🆕 Добавить", "🔁 Повтор")
@@ -429,7 +455,6 @@ def restart_command(message):
         reply_markup=menu_keyboard
     )
 
-import json
 from datetime import datetime
 
 def save_user_info(user):
@@ -916,14 +941,68 @@ def handle_weather_notifications(message):
         reply_markup=weather_keyboard
     )
 
-@bot.message_handler(func=lambda message: message.text == "⚙️ Настройки отображения")
+@bot.message_handler(func=lambda message: message.text == "⚙️ Настройки погоды")
 def handle_weather_settings(message):
-    # Здесь будет логика настроек погоды
+    # Проверяем, есть ли сохраненный город для пользователя
+    user_id = message.from_user.id
+    current_city = user_weather_settings.get(user_id, {}).get('city', 'Москва')
+    
     bot.send_message(
         message.chat.id,
-        "Функция 'Настройки погоды' в разработке",
-        reply_markup=weather_keyboard
+        f"Текущие настройки погоды:\n\nГород: {current_city}\n\nВыберите действие:",
+        reply_markup=get_weather_settings_keyboard()
     )
+
+def process_city_input(message):
+    if message.text == "↩️ Назад в меню погоды":
+        return handle_weather_settings(message)
+    
+    city = message.text.strip()
+    user_id = message.from_user.id
+    
+    # Проверяем, что город существует через API
+    api_key = '71d3d00aad6c943eb72ea5938056106d'
+    test_url = f"https://api.openweathermap.org/data/2.5/weather?q={city}&appid={api_key}"
+    
+    try:
+        response = requests.get(test_url)
+        if response.status_code == 200:
+            # Сохраняем настройки для пользователя
+            if user_id not in user_weather_settings:
+                user_weather_settings[user_id] = {}
+            user_weather_settings[user_id]['city'] = city
+            
+            # Можно сохранить в файл для постоянного хранения
+            save_weather_settings()
+            
+            bot.send_message(
+                message.chat.id,
+                f"✅ Город успешно изменен на {city}",
+                reply_markup=get_weather_settings_keyboard()
+            )
+        else:
+            bot.send_message(
+                message.chat.id,
+                "❌ Не удалось найти такой город. Попробуйте еще раз:",
+                reply_markup=back_to_weather_settings_keyboard()
+            )
+            bot.register_next_step_handler(message, process_city_input)
+    except Exception as e:
+        logger.error(f"Error checking city: {e}")
+        bot.send_message(
+            message.chat.id,
+            "⚠️ Произошла ошибка при проверке города. Попробуйте позже.",
+            reply_markup=get_weather_settings_keyboard()
+        )
+
+@bot.message_handler(func=lambda message: message.text == "🏙 Изменить город")
+def handle_change_city(message):
+    bot.send_message(
+        message.chat.id,
+        "Введите название города для отображения погоды:",
+        reply_markup=back_to_weather_settings_keyboard()
+    )
+    bot.register_next_step_handler(message, process_city_input)
 
 def ask_repeat_interval(message):
 
@@ -1306,6 +1385,7 @@ def handle_skip(message):
 # === 7. Главный блок запуска ===
 if __name__ == "__main__":
     load_reminders()
+    load_weather_settings()  # Добавляем эту строку
     restore_jobs()
 
     bot.set_my_commands([
