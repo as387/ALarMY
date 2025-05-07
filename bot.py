@@ -1029,46 +1029,30 @@ def process_city_input(message):
     
     try:
         city_name = message.text.strip()
-        user_id = message.from_user.id
+        api_key = 'ваш_ключ'  # Замените на реальный ключ
+        url = f"http://api.openweathermap.org/geo/1.0/direct?q={city_name}&limit=1&appid={api_key}"
         
-        # Проверяем город через API
-        api_key = 'ваш_api_key'  # Замените на реальный ключ
-        test_url = f"http://api.openweathermap.org/geo/1.0/direct?q={city_name}&limit=1&appid={api_key}"
+        response = requests.get(url, timeout=10)
+        data = response.json()
         
-        response = requests.get(test_url, timeout=10)
-        if response.status_code == 200:
-            data = response.json()
-            if data and isinstance(data, list):
-                # Сохраняем город для пользователя
-                if str(user_id) not in user_weather_settings:
-                    user_weather_settings[str(user_id)] = {}
-                
-                user_weather_settings[str(user_id)] = {
-                    'city': data[0]['name'],
-                    'lat': data[0]['lat'],
-                    'lon': data[0]['lon'],
-                    'country': data[0].get('country', '')
-                }
-                save_weather_settings()
-                
-                bot.send_message(
-                    message.chat.id,
-                    f"✅ Город изменен на: {data[0]['name']}, {data[0].get('country', '')}",
-                    reply_markup=get_weather_menu_keyboard()
-                )
-            else:
-                raise ValueError("Город не найден")
-        else:
-            raise ConnectionError("Ошибка подключения к API")
+        if not data:
+            raise ValueError("Город не найден")
             
-    except Exception as e:
-        logger.error(f"City validation error: {e}")
+        city_info = data[0]
         bot.send_message(
             message.chat.id,
-            "⚠️ Не удалось найти город. Проверьте написание и попробуйте снова.",
+            f"✅ Город изменен на: {city_info['name']}, {city_info.get('country', '')}",
+            reply_markup=get_weather_menu_keyboard()
+        )
+        
+    except Exception as e:
+        logger.error(f"Ошибка при смене города: {str(e)}")
+        bot.send_message(
+            message.chat.id,
+            "⚠️ Не удалось изменить город. Проверьте:\n1. Написание (лучше латиницей)\n2. Попробуйте формат 'Город,КодСтраны'\n3. API может быть недоступно",
             reply_markup=back_to_weather_settings_keyboard()
         )
-        bot.register_next_step_handler(message, process_city_input)
+        
 def ask_repeat_interval(message):
 
     if message.text == "↩️ Назад в меню":
