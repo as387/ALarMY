@@ -566,10 +566,7 @@ def send_daily_weather(user_id):
         logger.info(f"Sending daily weather to {user_id}")
         API_KEY = "71d3d00aad6c943eb72ea5938056106d"
         city = user_weather_settings.get(str(user_id), {}).get('city', 'Москва')
-        weather_data = get_cached_weather(API_KEY, city, force_update=True)  # Принудительное обновление
-        
-        logger.info(f"Requesting weather for {city}")
-        weather_data = get_cached_weather(API_KEY, city)
+        weather_data = get_cached_weather(API_KEY, city, force_update=True)  # Только один вызов
         
         if not weather_data:
             logger.error(f"No weather data for {city}")
@@ -1003,18 +1000,14 @@ def handle_today_weather(message):
     API_KEY = "71d3d00aad6c943eb72ea5938056106d"
     try:
         bot.send_chat_action(message.chat.id, 'typing')
-        weather_data = get_cached_weather(API_KEY, "Москва", force_update=True)  # Принудительно
-        # Получаем данные с кэшированием
-        weather_data = get_cached_weather(API_KEY, "Москва")
+        weather_data = get_cached_weather(API_KEY, "Москва", force_update=True)  # Только один вызов с force_update
         
         if not weather_data:
             raise Exception("Сервис погоды временно недоступен")
-
-        # Текущая погода
+        
         current = weather_data['list'][0]
         current_time = datetime.fromtimestamp(current['dt']).strftime('%H:%M')
         
-        # Формируем ответ
         response = [
             f"🌤 <b>Погода в Москве</b>",
             f"<i>Обновлено: {current_time}</i>",
@@ -1027,8 +1020,7 @@ def handle_today_weather(message):
             "<b>Прогноз на сегодня:</b>"
         ]
 
-        # Добавляем прогноз по часам
-        for forecast in weather_data['list'][1:8]:  # Следующие 21 час (3 часа * 7)
+        for forecast in weather_data['list'][1:8]:
             time = datetime.fromtimestamp(forecast['dt']).strftime('%H:%M')
             temp = round(forecast['main']['temp'])
             desc = forecast['weather'][0]['description']
@@ -1675,7 +1667,15 @@ def handle_skip(message):
     
 # === 7. Главный блок запуска ===
 if __name__ == "__main__":
-    clear_weather_cache()
+    clear_weather_cache()  # Очистка при старте
+    scheduler.add_job(
+        clear_weather_cache,
+        trigger='cron',
+        hour=0,
+        minute=0,
+        timezone=moscow,
+        id="daily_cache_clear"
+    )
     load_reminders()
     load_weather_settings()
     load_weather_notifications()
