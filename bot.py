@@ -1008,19 +1008,27 @@ def handle_today_weather(message):
         current_time = datetime.now(moscow)
         current_time_str = current_time.strftime('%H:%M %d.%m')
         
-        # Фильтруем прогнозы только на сегодня
+        # Создаем список всех прогнозов на сегодня
         today_forecasts = []
         for forecast in weather_data['list']:
             forecast_time = datetime.fromtimestamp(forecast['dt'], moscow)
             if forecast_time.date() == current_time.date():
-                today_forecasts.append(forecast)
+                today_forecasts.append({
+                    'time': forecast_time,
+                    'data': forecast
+                })
         
         if not today_forecasts:
             raise Exception("Нет данных на сегодня")
         
-        # Текущая погода (первый элемент в списке)
-        current = today_forecasts[0]
+        # Сортируем по времени
+        today_forecasts.sort(key=lambda x: x['time'])
         
+        # Текущая погода (берем ближайший по времени прогноз)
+        closest_forecast = min(today_forecasts, key=lambda x: abs((x['time'] - current_time).total_seconds()))
+        current = closest_forecast['data']
+        
+        # Формируем ответ
         response = [
             f"🌤 <b>Погода в Москве</b>",
             f"<i>Обновлено: {current_time_str}</i>",
@@ -1033,12 +1041,21 @@ def handle_today_weather(message):
             "<b>Прогноз на сегодня:</b>"
         ]
 
-        # Добавляем прогноз по часам (каждые 3 часа)
-        for forecast in today_forecasts[1:]:  # Пропускаем первый элемент (текущая погода)
-            time = datetime.fromtimestamp(forecast['dt'], moscow).strftime('%H:%M')
-            temp = round(forecast['main']['temp'])
-            desc = forecast['weather'][0]['description']
-            response.append(f"🕒 {time}: {temp}°C, {desc}")
+        # Добавляем прогноз для ключевых часов дня
+        key_hours = [3, 6, 9, 12, 15, 18, 21, 24]  # Часы, для которых показываем прогноз
+        
+        for hour in key_hours:
+            # Находим ближайший прогноз к указанному часу
+            target_time = current_time.replace(hour=hour % 24, minute=0, second=0, microsecond=0)
+            if hour == 24:
+                target_time = target_time.replace(hour=0) + timedelta(days=1)
+            
+            closest = min(today_forecasts, key=lambda x: abs((x['time'] - target_time).total_seconds()))
+            
+            time_str = closest['time'].strftime('%H:%M')
+            temp = round(closest['data']['main']['temp'])
+            desc = closest['data']['weather'][0]['description']
+            response.append(f"🕒 {time_str}: {temp}°C, {desc}")
 
         bot.send_message(
             message.chat.id,
@@ -1054,7 +1071,6 @@ def handle_today_weather(message):
             "⚠️ Не удалось получить данные о погоде. Попробуйте через несколько минут.",
             reply_markup=get_weather_menu_keyboard()
         )
-
 @bot.message_handler(func=lambda message: message.text == "🔄 Обновить погоду")
 def handle_refresh_weather(message):
     handle_today_weather(message)  # Просто вызываем тот же обработчик
