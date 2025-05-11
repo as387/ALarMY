@@ -601,7 +601,7 @@ def send_daily_weather(user_id):
         
     except Exception as e:
         logger.error(f"Error in send_daily_weather: {e}")
-
+        
 # === 2. Блок общих команд ===
 @bot.message_handler(commands=['start', 'help'])
 def handle_start_help(message):
@@ -1000,38 +1000,17 @@ def handle_today_weather(message):
     API_KEY = "71d3d00aad6c943eb72ea5938056106d"
     try:
         bot.send_chat_action(message.chat.id, 'typing')
-        weather_data = get_cached_weather(API_KEY, "Москва", force_update=True)
+        weather_data = get_cached_weather(API_KEY, "Москва", force_update=True)  # Только один вызов с force_update
         
         if not weather_data:
             raise Exception("Сервис погоды временно недоступен")
-
-        current_time = datetime.now(moscow)
-        current_time_str = current_time.strftime('%H:%M %d.%m')
         
-        # Создаем список всех прогнозов на сегодня
-        today_forecasts = []
-        for forecast in weather_data['list']:
-            forecast_time = datetime.fromtimestamp(forecast['dt'], moscow)
-            if forecast_time.date() == current_time.date():
-                today_forecasts.append({
-                    'time': forecast_time,
-                    'data': forecast
-                })
+        current = weather_data['list'][0]
+        current_time = datetime.fromtimestamp(current['dt']).strftime('%H:%M')
         
-        if not today_forecasts:
-            raise Exception("Нет данных на сегодня")
-        
-        # Сортируем по времени
-        today_forecasts.sort(key=lambda x: x['time'])
-        
-        # Текущая погода (берем ближайший по времени прогноз)
-        closest_forecast = min(today_forecasts, key=lambda x: abs((x['time'] - current_time).total_seconds()))
-        current = closest_forecast['data']
-        
-        # Формируем ответ
         response = [
             f"🌤 <b>Погода в Москве</b>",
-            f"<i>Обновлено: {current_time_str}</i>",
+            f"<i>Обновлено: {current_time}</i>",
             "",
             f"<b>Сейчас:</b> {current['weather'][0]['description'].capitalize()}",
             f"🌡 Температура: {round(current['main']['temp'])}°C",
@@ -1041,21 +1020,11 @@ def handle_today_weather(message):
             "<b>Прогноз на сегодня:</b>"
         ]
 
-        # Добавляем прогноз для ключевых часов дня
-        key_hours = [3, 6, 9, 12, 15, 18, 21, 24]  # Часы, для которых показываем прогноз
-        
-        for hour in key_hours:
-            # Находим ближайший прогноз к указанному часу
-            target_time = current_time.replace(hour=hour % 24, minute=0, second=0, microsecond=0)
-            if hour == 24:
-                target_time = target_time.replace(hour=0) + timedelta(days=1)
-            
-            closest = min(today_forecasts, key=lambda x: abs((x['time'] - target_time).total_seconds()))
-            
-            time_str = closest['time'].strftime('%H:%M')
-            temp = round(closest['data']['main']['temp'])
-            desc = closest['data']['weather'][0]['description']
-            response.append(f"🕒 {time_str}: {temp}°C, {desc}")
+        for forecast in weather_data['list'][1:8]:
+            time = datetime.fromtimestamp(forecast['dt']).strftime('%H:%M')
+            temp = round(forecast['main']['temp'])
+            desc = forecast['weather'][0]['description']
+            response.append(f"🕒 {time}: {temp}°C, {desc}")
 
         bot.send_message(
             message.chat.id,
