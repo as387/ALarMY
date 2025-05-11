@@ -584,7 +584,7 @@ def send_daily_weather(user_id):
             f"💨 Ветер: {current['wind']['speed']} м/с",
             f"💧 Влажность: {current['main']['humidity']}%",
             "",
-            "<b>Прогноз на сегодня:</b>"
+            "<b>Прогноз на 24 часа:</b>"
         ]
 
         for forecast in weather_data['list'][1:8]:
