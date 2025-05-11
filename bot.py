@@ -55,10 +55,11 @@ def back_to_weather_settings_keyboard():
     keyboard.add(KeyboardButton("↩️ Назад в меню погоды"))
     return keyboard
 
-# Кэшируем запросы на 10 минут (600 секунд)
 @lru_cache(maxsize=10)
-def get_cached_weather(api_key: str, city: str):
+def get_cached_weather(api_key: str, city: str, force_update: bool = False):
     """Получает и кэширует данные о погоде"""
+    if force_update:
+        get_cached_weather.cache_clear()
     try:
         url = f"https://api.openweathermap.org/data/2.5/forecast?q={city}&appid={api_key}&units=metric&lang=ru"
         response = requests.get(url, timeout=10)
@@ -439,6 +440,10 @@ def ensure_user_exists(user_id):
     if user_id not in reminders:
         reminders[user_id] = []
 
+def clear_weather_cache():
+    """Очищает кэш погоды для актуальных данных."""
+    get_cached_weather.cache_clear()
+    logger.info("Кэш погоды очищен")
 
 from telebot.types import BotCommand, BotCommandScopeChatMember
 
@@ -561,6 +566,7 @@ def send_daily_weather(user_id):
         logger.info(f"Sending daily weather to {user_id}")
         API_KEY = "71d3d00aad6c943eb72ea5938056106d"
         city = user_weather_settings.get(str(user_id), {}).get('city', 'Москва')
+        weather_data = get_cached_weather(API_KEY, city, force_update=True)  # Принудительное обновление
         
         logger.info(f"Requesting weather for {city}")
         weather_data = get_cached_weather(API_KEY, city)
@@ -994,11 +1000,10 @@ def handle_weather_menu(message):
 
 @bot.message_handler(func=lambda message: message.text == "🌦 Погода сегодня")
 def handle_today_weather(message):
-    API_KEY = "71d3d00aad6c943eb72ea5938056106d"  # Ваш API-ключ
-    
+    API_KEY = "71d3d00aad6c943eb72ea5938056106d"
     try:
         bot.send_chat_action(message.chat.id, 'typing')
-        
+        weather_data = get_cached_weather(API_KEY, "Москва", force_update=True)  # Принудительно
         # Получаем данные с кэшированием
         weather_data = get_cached_weather(API_KEY, "Москва")
         
@@ -1670,6 +1675,7 @@ def handle_skip(message):
     
 # === 7. Главный блок запуска ===
 if __name__ == "__main__":
+    clear_weather_cache()
     load_reminders()
     load_weather_settings()
     load_weather_notifications()
