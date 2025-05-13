@@ -52,7 +52,7 @@ def load_weather_settings():
 
 def back_to_weather_settings_keyboard():
     keyboard = ReplyKeyboardMarkup(resize_keyboard=True)
-    keyboard.add(KeyboardButton("↩️ Назад в меню погоды"))
+    keyboard.add(KeyboardButton("↩️ Назад в меню"))
     return keyboard
 
 @lru_cache(maxsize=10)
