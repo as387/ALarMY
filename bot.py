@@ -1010,7 +1010,7 @@ def handle_today_weather(message):
         
         response = [
             f"🌤 <b>Погода в Москве</b>",
-            f"Обновлено: {formatted_date}\n\n"
+            f"Обновлено: {formatted_date}\n"
             "",
             f"<b>Сейчас:</b> {current['weather'][0]['description'].capitalize()}",
             f"🌡 Температура: {round(current['main']['temp'])}°C",
