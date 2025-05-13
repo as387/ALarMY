@@ -1006,10 +1006,11 @@ def handle_today_weather(message):
         
         current = weather_data['list'][0]
         current_time = datetime.fromtimestamp(current['dt']).strftime('%H:%M')
+        formatted_date = datetime.now().strftime("%d.%m")
         
         response = [
             f"🌤 <b>Погода в Москве</b>",
-            f"<i>Обновлено: {current_time}</i>",
+            f"Обновлено: {formatted_date}\n\n"
             "",
             f"<b>Сейчас:</b> {current['weather'][0]['description'].capitalize()}",
             f"🌡 Температура: {round(current['main']['temp'])}°C",
