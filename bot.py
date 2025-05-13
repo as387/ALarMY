@@ -117,7 +117,7 @@ class Weather:
 def get_weather_settings_keyboard():
     keyboard = ReplyKeyboardMarkup(resize_keyboard=True)
     keyboard.row("🏙 Изменить город")
-    keyboard.row("↩️ Назад в меню погоды")
+    keyboard.row("↩️ Назад в меню")
     return keyboard
     
 def get_weather_forecast(api_key: str, city: str = "Москва") -> dict:
@@ -1052,7 +1052,7 @@ def handle_weather_notifications(message):
     keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
     keyboard.add(types.KeyboardButton("/change_weather_status"))
     keyboard.add(types.KeyboardButton("/change_weather_time"))
-    keyboard.add(types.KeyboardButton("↩️ Назад в меню погоды"))
+    keyboard.add(types.KeyboardButton("↩️ Назад в меню"))
     
     bot.send_message(
         message.chat.id,
@@ -1139,62 +1139,6 @@ def change_weather_time(message):
     save_weather_notifications()
     bot.send_message(message.chat.id, response, reply_markup=get_weather_menu_keyboard())
 
-def process_weather_time_input(message):
-    if message.text == "↩️ Назад в меню погоды":
-        return back_to_weather_menu(message)
-    
-    user_id = str(message.from_user.id)
-    time_input = message.text.strip().replace(',', '.')
-    
-    try:
-        # Парсим время
-        hours, minutes = map(int, time_input.split('.'))
-        if not (0 <= hours < 24 and 0 <= minutes < 60):
-            raise ValueError
-        
-        time_str = f"{hours}.{minutes:02d}"
-        user_weather_notifications[user_id]['time'] = time_str
-        
-        # Рассчитываем следующее время
-        now = datetime.now(moscow)
-        today_target = now.replace(hour=hours, minute=minutes, second=0, microsecond=0)
-        
-        # Определяем, будет ли уведомление сегодня или завтра
-        if today_target > now:
-            next_time = today_target
-            when = "сегодня"
-        else:
-            next_time = today_target + timedelta(days=1)
-            when = "завтра"
-        
-        # Форматируем дату для ответа
-        if next_time.date() == now.date():
-            date_str = "сегодня"
-        elif next_time.date() == now.date() + timedelta(days=1):
-            date_str = "завтра"
-        else:
-            date_str = next_time.strftime('%d.%m')
-        
-        bot.send_message(
-            message.chat.id,
-            f"✅ Уведомления будут приходить в {time_str} MSK\n"
-            f"(Следующее: {date_str} в {next_time.strftime('%H:%M')})",
-            reply_markup=get_weather_menu_keyboard()
-        )
-        
-        # Перепланируем, если уведомления включены
-        if user_weather_notifications[user_id]['enabled']:
-            schedule_daily_weather(int(user_id), time_str)
-        
-        save_weather_notifications()
-        
-    except:
-        bot.send_message(
-            message.chat.id,
-            "❌ Неверный формат времени. Используйте ЧЧ.ММ",
-            reply_markup=back_to_weather_settings_keyboard()
-        )
-        bot.register_next_step_handler(message, process_weather_time_input)
 @bot.message_handler(commands=['check_weather_time'])
 def check_weather_time(message):
     user_id = str(message.from_user.id)
@@ -1227,45 +1171,6 @@ def handle_weather_settings(message):
         reply_markup=get_weather_menu_keyboard()
     )
     
-@bot.message_handler(func=lambda message: message.text == "↩️ Назад в меню погоды")
-def back_to_weather_menu(message):
-    bot.send_message(
-        message.chat.id,
-        "Меню погоды:",
-        reply_markup=get_weather_menu_keyboard()
-    )
-    
-    try:
-        response = requests.get(test_url)
-        if response.status_code == 200:
-            # Сохраняем настройки для пользователя
-            if user_id not in user_weather_settings:
-                user_weather_settings[user_id] = {}
-            user_weather_settings[user_id]['city'] = city
-            
-            # Можно сохранить в файл для постоянного хранения
-            save_weather_settings()
-            
-            bot.send_message(
-                message.chat.id,
-                f"✅ Город успешно изменен на {city}",
-                reply_markup=get_weather_settings_keyboard()
-            )
-        else:
-            bot.send_message(
-                message.chat.id,
-                "❌ Не удалось найти такой город. Попробуйте еще раз:",
-                reply_markup=back_to_weather_settings_keyboard()
-            )
-            bot.register_next_step_handler(message, process_city_input)
-    except Exception as e:
-        logger.error(f"Error checking city: {e}")
-        bot.send_message(
-            message.chat.id,
-            "⚠️ Произошла ошибка при проверке города. Попробуйте позже.",
-            reply_markup=get_weather_settings_keyboard()
-        )
-
 @bot.message_handler(func=lambda message: message.text == "🏙 Изменить город")
 def handle_change_city(message):
     print ("Пока что доступна только Москва 😔😔😔")
