@@ -1005,12 +1005,15 @@ def handle_today_weather(message):
             raise Exception("Сервис погоды временно недоступен")
         
         current = weather_data['list'][0]
-        current_time = datetime.now(moscow).strftime("%H:%M")  # Текущее время MSK
-        formatted_date = datetime.now(moscow).strftime("%d.%m")  # Текущая дата MSK
+        current_time = datetime.now(moscow).strftime("%H:%M")
+        formatted_date = datetime.now(moscow).strftime("%d.%m")
+        
+        # Получаем текущую дату в MSK для фильтрации
+        today = datetime.now(moscow).date()
         
         response = [
             f"🌤 <b>Погода в Москве</b>",
-            f"Обновлено: {formatted_date} {current_time}\n",  # Добавляем и дату, и время
+            f"Обновлено: {formatted_date} {current_time}",
             "",
             f"<b>Сейчас:</b> {current['weather'][0]['description'].capitalize()}",
             f"🌡 Температура: {round(current['main']['temp'])}°C",
@@ -1020,8 +1023,7 @@ def handle_today_weather(message):
             "<b>Прогноз на сегодня:</b>"
         ]
 
-        # Фильтруем прогнозы по текущей дате
-        today = datetime.now(moscow).date()
+        # Фильтруем прогнозы на текущий день
         for forecast in weather_data['list']:
             forecast_time = datetime.fromtimestamp(forecast['dt']).astimezone(moscow)
             if forecast_time.date() == today:
@@ -1029,8 +1031,6 @@ def handle_today_weather(message):
                 temp = round(forecast['main']['temp'])
                 desc = forecast['weather'][0]['description']
                 response.append(f"🕒 {time_str}: {temp}°C, {desc}")
-                if len(response) >= 10:  # Ограничиваем количество прогнозов
-                    break
 
         bot.send_message(
             message.chat.id,
