@@ -635,51 +635,44 @@ def start_command(message):
 @bot.message_handler(regexp=r"^/done_[\w\-]+$")
 def handle_done_command(message):
     user_id = message.from_user.id
-    ensure_user_exists(user_id)
-
-    job_id = message.text.replace("/done_", "").strip()
-
+    reminder_id = message.text.replace("/done_", "").strip()
+    
     for rem in reminders.get(user_id, []):
-        if str(rem["id"]) == job_id:
+        if str(rem["id"]) == reminder_id:
+            # Удаляем задание из планировщика
             try:
                 scheduler.remove_job(rem["job_id"])
             except:
                 pass
+            
+            # Удаляем напоминание
             reminders[user_id].remove(rem)
             save_reminders()
-            bot.send_message(message.chat.id, f"✅ Напоминание «{rem['text']}» подтверждено и удалено.", reply_markup=menu_keyboard)
+            
+            bot.send_message(
+                message.chat.id,
+                f"✅ Напоминание «{rem['text']}» подтверждено и удалено.",
+                reply_markup=menu_keyboard
+            )
             return
-
-    bot.send_message(message.chat.id, "Напоминание не найдено или уже подтверждено.", reply_markup=menu_keyboard)
-
+    
+    bot.send_message(message.chat.id, "❌ Напоминание не найдено.", reply_markup=menu_keyboard)
 
 @bot.message_handler(regexp=r"^/skip_[\w\-]+$")
 def handle_skip_command(message):
     user_id = message.from_user.id
-    ensure_user_exists(user_id)
-
-    job_id = message.text.replace("/skip_", "").strip()
-
+    reminder_id = message.text.replace("/skip_", "").strip()
+    
     for rem in reminders.get(user_id, []):
-        if str(rem["id"]) == job_id:
-            interval = rem.get("repeat_interval", confirmation_interval)
-            new_job_id = str(uuid.uuid4())  # технический ID для планировщика
-
-            rem["time"] = datetime.utcnow() + timedelta(minutes=interval)
-            rem["job_id"] = new_job_id
-
-            scheduler.add_job(
-                send_reminder,
-                trigger='date',
-                run_date=rem["time"],
-                args=[user_id, rem["text"], rem["time"].strftime("%H:%M"), new_job_id],
-                id=new_job_id
+        if str(rem["id"]) == reminder_id:
+            bot.send_message(
+                message.chat.id,
+                f"🔁 Напоминание «{rem['text']}» будет повторено через {rem.get('repeat_interval', 30)} мин.",
+                reply_markup=menu_keyboard
             )
-            save_reminders()
-            bot.send_message(message.chat.id, f"🔁 Перенесено на {interval} минут: {rem['text']}", reply_markup=menu_keyboard)
             return
-
-    bot.send_message(message.chat.id, "Напоминание не найдено или уже обработано.", reply_markup=menu_keyboard)
+    
+    bot.send_message(message.chat.id, "❌ Напоминание не найдено.", reply_markup=menu_keyboard)
 
 @bot.message_handler(func=lambda message: message.text == "🆕 Добавить")
 def handle_add(message):
@@ -817,7 +810,7 @@ def process_reminder(message):
             "job_id": job_id,                 # планировочный ID
             "time": reminder_datetime,       # или first_run_utc
             "text": event,                   # или event + " (повт. ...)"
-            "is_repeating": False,           # или True
+            "is_repeating": True,           # или True
             "needs_confirmation": False      # или True
         })
         save_reminders()
@@ -1434,42 +1427,32 @@ def process_remove_input(message):
         bot.send_message(message.chat.id, "Некорректный ввод, отмена удаления.", reply_markup=ReplyKeyboardMarkup())
 
 def send_reminder(user_id, event, time, job_id):
-    logger.info(f"[REMINDER] STARTED for user {user_id} | Event: {event} | Time: {time} | Job ID: {job_id}")
-
     try:
-        reminder_time_utc = datetime.utcnow()
-        reminder_time_msk = utc.localize(reminder_time_utc).astimezone(moscow).strftime('%H:%M')
-
-        keyboard = None
-        text_suffix = ""
-
+        # Отправка напоминания
         for rem in reminders.get(user_id, []):
             if rem["job_id"] == job_id and rem.get("needs_confirmation"):
-                confirmation_pending[user_id] = {
-                    "job_id": job_id,
-                    "text": event
-                }
-                
-                text_suffix = (
-                    f"\n\nНажмите, если выполнили:\n"
-                    f"/done_{rem['id']}\n"
-                    f"или пропустите:\n"
-                    f"/skip_{rem['id']}"
+                # Добавляем кнопки подтверждения/пропуска
+                text = (
+                    f"🔔 Напоминание: {event}\n"
+                    f"Нажмите:\n"
+                    f"/done_{rem['id']} - подтвердить выполнение\n"
+                    f"/skip_{rem['id']} - отложить на {rem.get('repeat_interval', 30)} мин."
                 )
-
+                bot.send_message(user_id, text, reply_markup=menu_keyboard)
+                
+                # Планируем повтор, если не подтверждено
+                scheduler.add_job(
+                    send_reminder,
+                    trigger='interval',
+                    minutes=rem.get("repeat_interval", 30),
+                    args=[user_id, event, time, job_id],
+                    id=job_id,
+                    replace_existing=True
+                )
                 break
-
-        msg = bot.send_message(
-            user_id,
-            f"🔔 Напоминание: {event} (в {reminder_time_msk} по МСК){text_suffix}\n\n[#ID:{rem['id']}]",
-            reply_markup=menu_keyboard
-        )
-
-        logger.info(f"[REMINDER] Sent to user {user_id}")
-
     except Exception as e:
-        logger.error(f"[REMINDER ERROR] {e}")
-
+        logger.error(f"Ошибка в send_reminder: {e}")
+        
     # Обработка повтора
     for rem in reminders.get(user_id, []):
         if str(rem["job_id"]) == job_id:
