@@ -1436,7 +1436,6 @@ def send_reminder(user_id, event, time, job_id):
                     f"🔔 Напоминание: {event}\n"
                     f"Нажмите:\n"
                     f"/done_{rem['id']} - подтвердить выполнение\n"
-                    f"/skip_{rem['id']} - отложить на {rem.get('repeat_interval', 30)} мин."
                 )
                 bot.send_message(user_id, text, reply_markup=menu_keyboard)
                 
