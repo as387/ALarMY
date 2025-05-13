@@ -608,7 +608,7 @@ def handle_start_help(message):
     if message.text.startswith('/start'):
         ensure_user_exists(message.from_user.id)
         save_user_info(message.from_user)
-        bot.send_message(message.chat.id, "Главное меню:\nВыберите действие:", reply_markup=menu_keyboard)
+        bot.send_message(message.chat.id, "Главное меню:", reply_markup=menu_keyboard)
     elif message.text.startswith('/help'):
         try:
             with open("instruction_extended.txt", "rb") as txt_file:
