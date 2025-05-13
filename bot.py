@@ -577,7 +577,6 @@ def send_daily_weather(user_id):
         
         response = [
             f"🌤 <b>Ежедневный прогноз погоды в {city}</b>",
-            f"<i>Обновлено: {current_time}</i>",
             "",
             f"<b>Сейчас:</b> {current['weather'][0]['description'].capitalize()}",
             f"🌡 Температура: {round(current['main']['temp'])}°C",
