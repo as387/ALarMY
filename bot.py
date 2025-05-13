@@ -658,22 +658,6 @@ def handle_done_command(message):
     
     bot.send_message(message.chat.id, "❌ Напоминание не найдено.", reply_markup=menu_keyboard)
 
-@bot.message_handler(regexp=r"^/skip_[\w\-]+$")
-def handle_skip_command(message):
-    user_id = message.from_user.id
-    reminder_id = message.text.replace("/skip_", "").strip()
-    
-    for rem in reminders.get(user_id, []):
-        if str(rem["id"]) == reminder_id:
-            bot.send_message(
-                message.chat.id,
-                f"🔁 Напоминание «{rem['text']}» будет повторено через {rem.get('repeat_interval', 30)} мин.",
-                reply_markup=menu_keyboard
-            )
-            return
-    
-    bot.send_message(message.chat.id, "❌ Напоминание не найдено.", reply_markup=menu_keyboard)
-
 @bot.message_handler(func=lambda message: message.text == "🆕 Добавить")
 def handle_add(message):
     add_reminder(message)  # Вызывает уже существующую функцию
