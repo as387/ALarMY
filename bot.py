@@ -999,18 +999,18 @@ def handle_today_weather(message):
     API_KEY = "71d3d00aad6c943eb72ea5938056106d"
     try:
         bot.send_chat_action(message.chat.id, 'typing')
-        weather_data = get_cached_weather(API_KEY, "Москва", force_update=True)  # Только один вызов с force_update
+        weather_data = get_cached_weather(API_KEY, "Москва", force_update=True)
         
         if not weather_data:
             raise Exception("Сервис погоды временно недоступен")
         
         current = weather_data['list'][0]
-        current_time = datetime.fromtimestamp(current['dt']).strftime('%H:%M')
-        formatted_date = datetime.now().strftime("%d.%m")
+        current_time = datetime.now(moscow).strftime("%H:%M")  # Текущее время MSK
+        formatted_date = datetime.now(moscow).strftime("%d.%m")  # Текущая дата MSK
         
         response = [
             f"🌤 <b>Погода в Москве</b>",
-            f"Обновлено: {formatted_date}\n"
+            f"Обновлено: {formatted_date} {current_time}\n",  # Добавляем и дату, и время
             "",
             f"<b>Сейчас:</b> {current['weather'][0]['description'].capitalize()}",
             f"🌡 Температура: {round(current['main']['temp'])}°C",
@@ -1020,11 +1020,17 @@ def handle_today_weather(message):
             "<b>Прогноз на сегодня:</b>"
         ]
 
-        for forecast in weather_data['list'][1:8]:
-            time = datetime.fromtimestamp(forecast['dt']).strftime('%H:%M')
-            temp = round(forecast['main']['temp'])
-            desc = forecast['weather'][0]['description']
-            response.append(f"🕒 {time}: {temp}°C, {desc}")
+        # Фильтруем прогнозы по текущей дате
+        today = datetime.now(moscow).date()
+        for forecast in weather_data['list']:
+            forecast_time = datetime.fromtimestamp(forecast['dt']).astimezone(moscow)
+            if forecast_time.date() == today:
+                time_str = forecast_time.strftime('%H:%M')
+                temp = round(forecast['main']['temp'])
+                desc = forecast['weather'][0]['description']
+                response.append(f"🕒 {time_str}: {temp}°C, {desc}")
+                if len(response) >= 10:  # Ограничиваем количество прогнозов
+                    break
 
         bot.send_message(
             message.chat.id,
@@ -1040,6 +1046,7 @@ def handle_today_weather(message):
             "⚠️ Не удалось получить данные о погоде. Попробуйте через несколько минут.",
             reply_markup=get_weather_menu_keyboard()
         )
+        
 @bot.message_handler(func=lambda message: message.text == "🔄 Обновить погоду")
 def handle_refresh_weather(message):
     handle_today_weather(message)  # Просто вызываем тот же обработчик
