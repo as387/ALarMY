@@ -225,16 +225,30 @@ def process_interval_input(message):
         if new_interval <= 0:
             raise ValueError("Интервал должен быть положительным числом.")
         
-        # Обновляем глобальную переменную
         confirmation_interval = new_interval
         
-        # Обновляем все активные напоминания с новым интервалом
-        for user_reminders in reminders.values():
+        # Обновляем все активные напоминания с подтверждением
+        for user_id, user_reminders in reminders.items():
             for rem in user_reminders:
                 if rem.get("needs_confirmation"):
                     rem["repeat_interval"] = confirmation_interval
-        save_reminders()
+                    
+                    # Обновляем задание в планировщике
+                    try:
+                        scheduler.remove_job(rem["job_id"])
+                    except:
+                        pass
+                        
+                    scheduler.add_job(
+                        send_reminder,
+                        trigger='interval',
+                        minutes=confirmation_interval,
+                        args=[user_id, rem["text"], rem["time"].strftime("%H:%M"), rem["job_id"]],
+                        id=rem["job_id"],
+                        replace_existing=True
+                    )
         
+        save_reminders()
         bot.send_message(
             message.chat.id,
             f"✅ Интервал подтверждения изменён на {confirmation_interval} минут. "
@@ -249,6 +263,7 @@ def process_interval_input(message):
             reply_markup=menu_keyboard
         )
         bot.register_next_step_handler(message, process_interval_input)
+        
 # Пример использования изменения интервала при добавлении подтверждения
 @bot.message_handler(func=lambda message: message.text == "✅ Подтв.")
 def toggle_repeat_mode(message):
@@ -278,23 +293,43 @@ def process_repeat_selection(message):
         for i in indices:
             if 0 < i <= len(sorted_reminders):
                 rem = sorted_reminders[i - 1]
-                # Переключаем: если уже был включён — отключаем
                 if rem.get("needs_confirmation"):
+                    # Если подтверждение уже было включено - отключаем
                     rem["needs_confirmation"] = False
-                    rem.pop("repeat_interval", None)  # Убираем повторение, если оно было
-            else:
-                rem["needs_confirmation"] = True
-                rem["repeat_interval"] = confirmation_interval  # Важно сохранять текущий интервал
+                    rem.pop("repeat_interval", None)
+                    try:
+                        scheduler.remove_job(rem["job_id"])
+                    except:
+                        pass
+                else:
+                    # Если подтверждение было выключено - включаем
+                    rem["needs_confirmation"] = True
+                    rem["repeat_interval"] = confirmation_interval
+                    
+                    # Пересоздаем задание с новым интервалом
+                    try:
+                        scheduler.remove_job(rem["job_id"])
+                    except:
+                        pass
+                        
+                    scheduler.add_job(
+                        send_reminder,
+                        trigger='interval',
+                        minutes=confirmation_interval,
+                        args=[user_id, rem["text"], rem["time"].strftime("%H:%M"), rem["job_id"]],
+                        id=rem["job_id"],
+                        replace_existing=True
+                    )
 
         save_reminders()
         bot.send_message(
             message.chat.id,
-            f"✅ Обновлено! Повтор через {confirmation_interval} мин. (если включено)",
+            f"✅ Обновлено! Повтор через {confirmation_interval} мин.",
             reply_markup=menu_keyboard
         )
     except Exception as e:
-        bot.send_message(message.chat.id, "Что-то пошло не так. Проверь формат и попробуй снова.", reply_markup=ReplyKeyboardMarkup())
-        logger.error(f"[REPEAT_SELECTION ERROR] {e}")
+        bot.send_message(message.chat.id, "Ошибка: проверьте формат ввода.", reply_markup=menu_keyboard)
+        logger.error(f"Error in process_repeat_selection: {e}")
 
 scheduler = BackgroundScheduler()
 scheduler.start()
@@ -1334,27 +1369,19 @@ def process_remove_input(message):
 
 def send_reminder(user_id, event, time, job_id):
     try:
-        # Отправка напоминания
+        # Отправляем само напоминание
         for rem in reminders.get(user_id, []):
-            if rem["job_id"] == job_id and rem.get("needs_confirmation"):
-                # Добавляем кнопки подтверждения/пропуска
-                text = (
-                    f"🔔 Напоминание: {event}\n"
-                    f"Нажмите:\n"
-                    f"/done_{rem['id']} - подтвердить выполнение\n"
-                )
+            if rem["job_id"] == job_id:
+                text = f"🔔 Напоминание: {event}\n"
+                if rem.get("needs_confirmation"):
+                    text += f"Нажмите /done_{rem['id']} для подтверждения"
+                
                 bot.send_message(user_id, text, reply_markup=menu_keyboard)
                 
-                # Планируем повтор, если не подтверждено
-                scheduler.add_job(
-                    send_reminder,
-                    trigger='interval',
-                    minutes=rem.get("repeat_interval", 30),
-                    args=[user_id, event, time, job_id],
-                    id=job_id,
-                    replace_existing=True
-                )
+                # Если требуется подтверждение, задание уже создано с интервалом
+                # и не нужно создавать его здесь повторно
                 break
+                
     except Exception as e:
         logger.error(f"Ошибка в send_reminder: {e}")
         
