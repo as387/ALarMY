@@ -224,12 +224,31 @@ def process_interval_input(message):
         new_interval = int(message.text.strip())
         if new_interval <= 0:
             raise ValueError("Интервал должен быть положительным числом.")
+        
+        # Обновляем глобальную переменную
         confirmation_interval = new_interval
-        bot.send_message(message.chat.id, f"Интервал для подтверждения изменён на {confirmation_interval} минут(ы).")
+        
+        # Обновляем все активные напоминания с новым интервалом
+        for user_reminders in reminders.values():
+            for rem in user_reminders:
+                if rem.get("needs_confirmation"):
+                    rem["repeat_interval"] = confirmation_interval
+        save_reminders()
+        
+        bot.send_message(
+            message.chat.id,
+            f"✅ Интервал подтверждения изменён на {confirmation_interval} минут. "
+            "Все активные напоминания обновлены.",
+            reply_markup=menu_keyboard
+        )
+        
     except ValueError as e:
-        bot.send_message(message.chat.id, f"Ошибка: {e}. Пожалуйста, введите правильное число.")
+        bot.send_message(
+            message.chat.id,
+            f"Ошибка: {e} Пожалуйста, введите целое число больше 0.",
+            reply_markup=menu_keyboard
+        )
         bot.register_next_step_handler(message, process_interval_input)
-
 # Пример использования изменения интервала при добавлении подтверждения
 @bot.message_handler(func=lambda message: message.text == "✅ Подтв.")
 def toggle_repeat_mode(message):
@@ -263,10 +282,9 @@ def process_repeat_selection(message):
                 if rem.get("needs_confirmation"):
                     rem["needs_confirmation"] = False
                     rem.pop("repeat_interval", None)  # Убираем повторение, если оно было
-                else:
-                    rem["needs_confirmation"] = True
-                    # Устанавливаем интервал из переменной confirmation_interval
-                    rem["repeat_interval"] = confirmation_interval
+            else:
+                rem["needs_confirmation"] = True
+                rem["repeat_interval"] = confirmation_interval  # Важно сохранять текущий интервал
 
         save_reminders()
         bot.send_message(
@@ -548,15 +566,14 @@ def schedule_daily_weather(user_id, time_str=DEFAULT_NOTIFICATION_TIME):
         
         # Создаем cron-задание с учетом часового пояса
         scheduler.add_job(
-            send_daily_weather,
-            trigger='cron',
-            hour=target_time.hour,
-            minute=target_time.minute,
-            args=[user_id],
-            id=f"weather_{user_id}",
-            timezone=moscow  # Указываем московский часовой пояс
+            send_reminder,
+            trigger='interval',
+            minutes=rem.get("repeat_interval", confirmation_interval),  # Берём из настроек
+            args=[user_id, event, time, job_id],
+            id=job_id,
+            replace_existing=True
         )
-        
+                
     except Exception as e:
         logger.error(f"Error scheduling weather for user {user_id}: {e}")
         raise
