@@ -581,7 +581,7 @@ def schedule_daily_weather(user_id, time_str=DEFAULT_NOTIFICATION_TIME):
 def send_daily_weather(user_id):
     try:
         logger.info(f"Sending daily weather to {user_id}")
-        API_KEY = "71d3d00aad6c943eb72ea5938056106d"
+        API_KEY = "4f57a2381d2462c3c953146b76078917"
         city = user_weather_settings.get(str(user_id), {}).get('city', 'Москва')
         weather_data = get_cached_weather(API_KEY, city, force_update=True)  # Только один вызов
         
@@ -990,7 +990,7 @@ def handle_weather_menu(message):
 
 @bot.message_handler(func=lambda message: message.text == "🌦 Погода сегодня")
 def handle_today_weather(message):
-    API_KEY = "71d3d00aad6c943eb72ea5938056106d"
+    API_KEY = "4f57a2381d2462c3c953146b76078917"
     try:
         bot.send_chat_action(message.chat.id, 'typing')
         weather_data = get_cached_weather(API_KEY, "Москва", force_update=True)
