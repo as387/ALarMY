@@ -377,7 +377,7 @@ def get_hourly_forecast(city: str) -> dict:
     :param city: Название города
     :return: Словарь с прогнозами {время: данные}
     """
-    api_key = '4f57a2381d2462c3c953146b76078917'  # Ваш API-ключ
+    api_key = '7c70d84340f4e9b9e99874cd465aefa8'  # Ваш API-ключ
     base_url = 'https://api.openweathermap.org/data/2.5/forecast'
     
     params = {
@@ -581,7 +581,7 @@ def schedule_daily_weather(user_id, time_str=DEFAULT_NOTIFICATION_TIME):
 def send_daily_weather(user_id):
     try:
         logger.info(f"Sending daily weather to {user_id}")
-        API_KEY = "4f57a2381d2462c3c953146b76078917"
+        API_KEY = "7c70d84340f4e9b9e99874cd465aefa8"
         city = user_weather_settings.get(str(user_id), {}).get('city', 'Москва')
         weather_data = get_cached_weather(API_KEY, city, force_update=True)  # Только один вызов
         
@@ -990,7 +990,7 @@ def handle_weather_menu(message):
 
 @bot.message_handler(func=lambda message: message.text == "🌦 Погода сегодня")
 def handle_today_weather(message):
-    API_KEY = "4f57a2381d2462c3c953146b76078917"
+    API_KEY = "7c70d84340f4e9b9e99874cd465aefa8"
     try:
         bot.send_chat_action(message.chat.id, 'typing')
         weather_data = get_cached_weather(API_KEY, "Москва", force_update=True)
