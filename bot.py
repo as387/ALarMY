@@ -377,7 +377,7 @@ def get_hourly_forecast(city: str) -> dict:
     :param city: Название города
     :return: Словарь с прогнозами {время: данные}
     """
-    api_key = '3724aa62f11ed491d12fd0657d964d1d'  # Ваш API-ключ
+    api_key = '4f57a2381d2462c3c953146b76078917'  # Ваш API-ключ
     base_url = 'https://api.openweathermap.org/data/2.5/forecast'
     
     params = {
